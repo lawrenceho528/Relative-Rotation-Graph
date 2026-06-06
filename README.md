@@ -69,8 +69,9 @@ The app includes `.nojekyll` so GitHub Pages serves the static PWA files directl
 3. Calculates default Pine-style RRG values for daily, weekly, and monthly views.
 4. Writes `public/data/rrg.json`.
 5. Commits only `public/data/rrg.json`.
+6. Builds `dist` and deploys the fresh `data/rrg.json` to GitHub Pages in the same workflow run.
 
-That commit triggers the GitHub Pages deploy workflow through the normal push trigger.
+The separate `Deploy app` workflow remains available for normal app-code pushes and manual Pages deploys.
 
 GitHub Actions uses Tiingo by default because Stooq may return browser-verification HTML in cloud runners instead of CSV data. Stooq support remains in `scripts/update_rrg_data.py` for manual fallback with `--provider stooq`, but it is not used by the scheduled workflow.
 

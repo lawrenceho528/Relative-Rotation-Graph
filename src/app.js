@@ -420,7 +420,10 @@ async function loadSameOriginHistories(symbols, forceRefresh) {
   symbols.forEach((symbol) => {
     const rows = rowsBySymbol[symbol];
     if (!Array.isArray(rows) || rows.length < 180) {
-      throw new Error(`Bundled market data missing ${symbol}`);
+      if (symbol === BENCHMARK.symbol) {
+        throw new Error(`Generated RRG data missing benchmark ${symbol}`);
+      }
+      return;
     }
 
     histories.set(
@@ -501,11 +504,13 @@ function buildModel(assets, histories, timeframe) {
   const benchmark = sampleHistory(histories.get(BENCHMARK.symbol), timeframe);
   const dates = benchmark.slice(-config.history).map((row) => row.date);
   const benchmarkAligned = alignToDates(benchmark, dates);
-  const series = assets.map((asset) => {
-    const closes = alignToDates(sampleHistory(histories.get(asset.symbol), timeframe), dates);
-    const points = computeRrgPoints(closes, benchmarkAligned, state.lengthPeriod, state.smoothPeriod);
-    return { ...asset, points };
-  });
+  const series = assets
+    .filter((asset) => histories.has(asset.symbol))
+    .map((asset) => {
+      const closes = alignToDates(sampleHistory(histories.get(asset.symbol), timeframe), dates);
+      const points = computeRrgPoints(closes, benchmarkAligned, state.lengthPeriod, state.smoothPeriod);
+      return { ...asset, points };
+    });
 
   const firstValidIndex = series.reduce((maxIndex, item) => {
     const index = item.points.findIndex((point) => point);

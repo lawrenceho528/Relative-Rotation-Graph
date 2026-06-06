@@ -125,7 +125,7 @@ class StooqProvider:
 
 
 class TiingoProvider:
-    name = "Tiingo daily adjusted close"
+    name = "Tiingo EOD API"
     price_field = "adjClose"
 
     def __init__(self):
@@ -267,6 +267,7 @@ def main():
     rows_by_symbol = {symbol: rows[-HISTORY_LIMIT:] for symbol, rows in rows_by_symbol.items()}
     generated_at = date.today().isoformat()
     data_as_of = latest_common_date(rows_by_symbol) or generated_at
+    timeline_dates = [row["date"] for row in rows_by_symbol[BENCHMARK["symbol"]][-TIMEFRAMES["daily"]["history"] :]]
     payload = {
         "schemaVersion": 1,
         "generatedAt": generated_at,
@@ -284,6 +285,13 @@ def main():
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+    print(f"RRG data source: {source}")
+    print(f"RRG dataAsOf: {data_as_of}")
+    print(f"RRG first timeline date: {timeline_dates[0] if timeline_dates else ''}")
+    print(f"RRG last timeline date: {timeline_dates[-1] if timeline_dates else ''}")
+    print(f"RRG timeline dates: {len(timeline_dates)}")
+    print(f"RRG output file: {OUT}")
+    print("RRG deployed path: data/rrg.json")
     print(f"Wrote {OUT} symbols={len(rows_by_symbol)} warnings={len(warnings)} generatedAt={generated_at} source={source}")
 
 
