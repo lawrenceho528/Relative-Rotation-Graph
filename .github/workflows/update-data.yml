@@ -17,7 +17,9 @@ jobs:
         with:
           python-version: "3.x"
       - name: Generate RRG data
-        run: python scripts/update_rrg_data.py --provider stooq
+        env:
+          TIINGO_API_KEY: ${{ secrets.TIINGO_API_KEY }}
+        run: python scripts/update_rrg_data.py --provider tiingo
       - name: Commit generated data
         uses: stefanzweifel/git-auto-commit-action@v5
         with:

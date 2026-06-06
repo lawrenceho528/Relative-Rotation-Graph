@@ -71,6 +71,11 @@ INDUSTRIES = [
 ]
 
 SYMBOLS = [BENCHMARK["symbol"], *[row[0] for row in SECTORS], *[row[0] for row in INDUSTRIES]]
+TIINGO_SECRET_HELP = (
+    "TIINGO_API_KEY is missing. Add it in GitHub at "
+    "Settings -> Secrets and variables -> Actions -> New repository secret, "
+    "then name the secret TIINGO_API_KEY."
+)
 
 
 class StooqProvider:
@@ -125,7 +130,7 @@ class TiingoProvider:
 
     def fetch(self, symbol):
         if not self.api_key:
-            raise RuntimeError("TIINGO_API_KEY is not set")
+            raise RuntimeError(TIINGO_SECRET_HELP)
         url = f"https://api.tiingo.com/tiingo/daily/{urllib.parse.quote(symbol)}/prices?resampleFreq=daily"
         request = urllib.request.Request(url, headers={"Authorization": f"Token {self.api_key}"})
         with urllib.request.urlopen(request, timeout=30) as response:
@@ -153,12 +158,14 @@ def normalize_csv_row(row):
 
 def main():
     parser = argparse.ArgumentParser(description="Update generated RRG data for the static dashboard.")
-    parser.add_argument("--provider", choices=["stooq", "tiingo"], default="stooq")
+    parser.add_argument("--provider", choices=["stooq", "tiingo"], default="tiingo")
     parser.add_argument("--existing-only", action="store_true", help="Use existing local market-data.json for offline testing.")
     parser.add_argument("--use-existing-on-fail", action="store_true")
     args = parser.parse_args()
 
     provider = TiingoProvider() if args.provider == "tiingo" else StooqProvider()
+    if args.provider == "tiingo" and not provider.api_key and not args.existing_only and not args.use_existing_on_fail:
+        raise SystemExit(TIINGO_SECRET_HELP)
     if args.existing_only:
         rows_by_symbol = load_existing_rows()
         source = "Existing local market-data.json"

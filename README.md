@@ -17,7 +17,14 @@ Interactive iPad-ready Relative Rotation Graph for U.S. equity sector and indust
 Generate or refresh the local data file:
 
 ```powershell
-python .\scripts\update_rrg_data.py --provider stooq --use-existing-on-fail
+$env:TIINGO_API_KEY = "your-tiingo-key"
+python .\scripts\update_rrg_data.py --provider tiingo
+```
+
+For offline local checks without an API key, use the existing local data fallback:
+
+```powershell
+python .\scripts\update_rrg_data.py --provider tiingo --use-existing-on-fail
 ```
 
 Build the static artifact:
@@ -57,15 +64,25 @@ The app includes `.nojekyll` so GitHub Pages serves the static PWA files directl
 
 `.github/workflows/update-data.yml` runs on weekdays at `22:30 UTC`, safely after the regular U.S. market close. It:
 
-1. Runs `python scripts/update_rrg_data.py --provider stooq`.
-2. Downloads daily close history from Stooq.
+1. Runs `python scripts/update_rrg_data.py --provider tiingo`.
+2. Downloads daily adjusted close history from Tiingo using `TIINGO_API_KEY`.
 3. Calculates default Pine-style RRG values for daily, weekly, and monthly views.
 4. Writes `public/data/rrg.json`.
 5. Commits only `public/data/rrg.json`.
 
 That commit triggers the GitHub Pages deploy workflow through the normal push trigger.
 
-Tiingo support is scaffolded in `scripts/update_rrg_data.py`. To use it later, store the key as a GitHub Secret named `TIINGO_API_KEY` and change the workflow provider flag to `--provider tiingo`. API keys must stay in GitHub Secrets and must not be added to frontend code.
+GitHub Actions uses Tiingo by default because Stooq may return browser-verification HTML in cloud runners instead of CSV data. Stooq support remains in `scripts/update_rrg_data.py` for manual fallback with `--provider stooq`, but it is not used by the scheduled workflow.
+
+To add the Tiingo key:
+
+1. Open the GitHub repository.
+2. Go to `Settings > Secrets and variables > Actions`.
+3. Click `New repository secret`.
+4. Name the secret `TIINGO_API_KEY`.
+5. Paste the Tiingo API token as the value and save.
+
+API keys must stay in GitHub Secrets and must not be added to frontend code.
 
 ## Data Notes
 
@@ -98,7 +115,7 @@ Ticker lists live in two places and should be kept in sync:
 After changing tickers, run:
 
 ```powershell
-python .\scripts\update_rrg_data.py --provider stooq --use-existing-on-fail
+python .\scripts\update_rrg_data.py --provider tiingo --use-existing-on-fail
 python .\scripts\universe-audit.py
 ```
 
