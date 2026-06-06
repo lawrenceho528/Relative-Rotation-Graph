@@ -5,6 +5,7 @@ import math
 import os
 import pathlib
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
@@ -18,6 +19,8 @@ BENCHMARK = {"symbol": "SPY", "name": "S&P 500 ETF"}
 DEFAULT_LENGTH = 14
 DEFAULT_SMOOTH = 20
 HISTORY_LIMIT = 1260
+DEFAULT_HISTORY_YEARS = 5
+MIN_HISTORY_ROWS = 400
 TIMEFRAMES = {
     "daily": {"history": 1250},
     "weekly": {"history": 260},
@@ -131,17 +134,69 @@ class TiingoProvider:
     def fetch(self, symbol):
         if not self.api_key:
             raise RuntimeError(TIINGO_SECRET_HELP)
-        url = f"https://api.tiingo.com/tiingo/daily/{urllib.parse.quote(symbol)}/prices?resampleFreq=daily"
+        end_date = date.today()
+        start_date = end_date - timedelta(days=DEFAULT_HISTORY_YEARS * 366)
+        params = urllib.parse.urlencode(
+            {
+                "startDate": start_date.isoformat(),
+                "endDate": end_date.isoformat(),
+                "resampleFreq": "daily",
+            }
+        )
+        url = f"https://api.tiingo.com/tiingo/daily/{urllib.parse.quote(symbol)}/prices?{params}"
+        print(f"Tiingo request {symbol}: url={url}")
         request = urllib.request.Request(url, headers={"Authorization": f"Token {self.api_key}"})
-        with urllib.request.urlopen(request, timeout=30) as response:
-            payload = json.loads(response.read().decode("utf-8"))
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                status = response.getcode()
+                text = response.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            status = exc.code
+            text = exc.read().decode("utf-8", errors="replace")
+            print(f"Tiingo response {symbol}: httpStatus={status} rowsRaw=0 rowsFiltered=0 firstDate= lastDate=")
+            print(f"Tiingo error {symbol}: {summarize_json_or_text(text)}")
+            raise RuntimeError(f"{symbol}: Tiingo HTTP {status}") from exc
+
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError as exc:
+            print(f"Tiingo response {symbol}: httpStatus={status} rowsRaw=0 rowsFiltered=0 firstDate= lastDate=")
+            print(f"Tiingo error {symbol}: response was not JSON: {summarize_text(text)}")
+            raise RuntimeError(f"{symbol}: Tiingo returned non-JSON response") from exc
+
+        if not isinstance(payload, list):
+            print(f"Tiingo response {symbol}: httpStatus={status} rowsRaw=0 rowsFiltered=0 firstDate= lastDate=")
+            print(f"Tiingo error {symbol}: expected a JSON list, got {type(payload).__name__}: {summarize_payload(payload)}")
+            raise RuntimeError(f"{symbol}: Tiingo returned error response")
+
         rows = []
-        for row in payload:
-            close = row.get("adjClose")
-            if close and close > 0:
-                rows.append({"date": row["date"][:10], "close": round(float(close), 4)})
-        if len(rows) < 180:
-            raise RuntimeError(f"{symbol}: not enough Tiingo rows")
+        for raw_row in payload:
+            if not isinstance(raw_row, dict):
+                continue
+            row = normalize_json_row(raw_row)
+            date_value = str(row.get("date", ""))[:10]
+            close_value = row.get("adjclose", row.get("close"))
+            if not date_value or close_value in (None, ""):
+                continue
+            try:
+                datetime.fromisoformat(date_value)
+                close = float(close_value)
+            except (TypeError, ValueError):
+                continue
+            if close > 0:
+                rows.append({"date": date_value, "close": round(close, 4)})
+
+        first_date = rows[0]["date"] if rows else ""
+        last_date = rows[-1]["date"] if rows else ""
+        print(
+            f"Tiingo response {symbol}: httpStatus={status} rowsRaw={len(payload)} "
+            f"rowsFiltered={len(rows)} firstDate={first_date} lastDate={last_date}"
+        )
+        if len(rows) < MIN_HISTORY_ROWS:
+            raise RuntimeError(
+                f"{symbol}: not enough Tiingo rows after filtering "
+                f"({len(rows)} < {MIN_HISTORY_ROWS}); firstDate={first_date or 'n/a'} lastDate={last_date or 'n/a'}"
+            )
         return rows
 
 
@@ -156,6 +211,31 @@ def normalize_csv_row(row):
     return normalized
 
 
+def normalize_json_row(row):
+    return {normalize_csv_key(key): value for key, value in row.items()}
+
+
+def summarize_payload(payload):
+    if isinstance(payload, dict):
+        pairs = []
+        for key, value in payload.items():
+            pairs.append(f"{key}={summarize_text(str(value))}")
+        return "; ".join(pairs) if pairs else "{}"
+    return summarize_text(str(payload))
+
+
+def summarize_json_or_text(text):
+    try:
+        return summarize_payload(json.loads(text))
+    except json.JSONDecodeError:
+        return summarize_text(text)
+
+
+def summarize_text(text, limit=300):
+    compact = " ".join(str(text or "").split())
+    return compact[:limit] + ("..." if len(compact) > limit else "")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Update generated RRG data for the static dashboard.")
     parser.add_argument("--provider", choices=["stooq", "tiingo"], default="tiingo")
@@ -166,13 +246,14 @@ def main():
     provider = TiingoProvider() if args.provider == "tiingo" else StooqProvider()
     if args.provider == "tiingo" and not provider.api_key and not args.existing_only and not args.use_existing_on_fail:
         raise SystemExit(TIINGO_SECRET_HELP)
+    warnings = []
     if args.existing_only:
         rows_by_symbol = load_existing_rows()
         source = "Existing local market-data.json"
         price_field = "close"
     else:
         try:
-            rows_by_symbol = fetch_all(provider)
+            rows_by_symbol, warnings = fetch_all(provider)
             source = provider.name
             price_field = provider.price_field
         except Exception:
@@ -181,8 +262,9 @@ def main():
             rows_by_symbol = load_existing_rows()
             source = "Existing local market-data.json"
             price_field = "close"
+            warnings = [f"{provider.name} failed; used existing local data fallback"]
 
-    rows_by_symbol = {symbol: rows_by_symbol[symbol][-HISTORY_LIMIT:] for symbol in SYMBOLS}
+    rows_by_symbol = {symbol: rows[-HISTORY_LIMIT:] for symbol, rows in rows_by_symbol.items()}
     generated_at = date.today().isoformat()
     data_as_of = latest_common_date(rows_by_symbol) or generated_at
     payload = {
@@ -195,22 +277,40 @@ def main():
         "benchmark": BENCHMARK,
         "defaultPeriods": {"length": DEFAULT_LENGTH, "smooth": DEFAULT_SMOOTH},
         "timeframes": TIMEFRAMES,
+        "warnings": warnings,
         "symbols": rows_by_symbol,
         "rrg": build_precomputed_rrg(rows_by_symbol),
     }
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
-    print(f"Wrote {OUT} symbols={len(rows_by_symbol)} generatedAt={generated_at} source={source}")
+    print(f"Wrote {OUT} symbols={len(rows_by_symbol)} warnings={len(warnings)} generatedAt={generated_at} source={source}")
 
 
 def fetch_all(provider):
     rows_by_symbol = {}
+    warnings = []
     for index, symbol in enumerate(SYMBOLS, start=1):
-        rows_by_symbol[symbol] = provider.fetch(symbol)
+        try:
+            rows = provider.fetch(symbol)
+        except Exception as exc:
+            if symbol == BENCHMARK["symbol"]:
+                raise RuntimeError(f"{symbol}: benchmark fetch failed; cannot calculate RRG without SPY. {exc}") from exc
+            warning = f"{symbol}: skipped, {exc}"
+            warnings.append(warning)
+            print(f"WARNING: {warning}")
+            time.sleep(0.25)
+            continue
+
+        rows_by_symbol[symbol] = rows
+        if symbol == BENCHMARK["symbol"]:
+            print(
+                f"Benchmark {BENCHMARK['symbol']} confirmed: rows={len(rows)} "
+                f"firstDate={rows[0]['date']} lastDate={rows[-1]['date']}"
+            )
         print(f"{index:02d}/{len(SYMBOLS)} {symbol} rows={len(rows_by_symbol[symbol])}")
         time.sleep(0.25)
-    return rows_by_symbol
+    return rows_by_symbol, warnings
 
 
 def load_existing_rows():
@@ -240,7 +340,7 @@ def build_precomputed_rrg(rows_by_symbol):
         benchmark_aligned = align_to_dates(benchmark, dates)
         series = {}
         for symbol in SYMBOLS:
-            if symbol == BENCHMARK["symbol"]:
+            if symbol == BENCHMARK["symbol"] or symbol not in rows_by_symbol:
                 continue
             closes = align_to_dates(sample_history(rows_by_symbol[symbol], timeframe), dates)
             points = compute_rrg_points(closes, benchmark_aligned, DEFAULT_LENGTH, DEFAULT_SMOOTH)
