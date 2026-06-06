@@ -1,0 +1,8 @@
+.chrome-profile/
+.edge-profile/
+.browser-profile-*/
+chrome-dom.txt
+rgg-ipad-mini*.png
+*.log
+dist/
+deploy/

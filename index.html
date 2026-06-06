@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#182033" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="RGG Rotation" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>RGG Rotation</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">U.S. equities vs SPY</p>
+          <h1>Relative Rotation Graph</h1>
+        </div>
+        <div class="topbar-meta">
+          <div class="status-pill" id="dataStatus">Preparing data...</div>
+          <p class="last-updated" id="lastUpdated">Last updated: --</p>
+        </div>
+      </header>
+
+      <section class="control-strip" aria-label="Chart controls">
+        <div class="segmented" role="group" aria-label="Universe">
+          <button class="segment active" type="button" data-universe="sectors">Sectors</button>
+          <button class="segment" type="button" data-universe="industries">Industries</button>
+        </div>
+        <div class="segmented timeframe-segmented" role="group" aria-label="Timeframe">
+          <button class="segment active" type="button" data-timeframe="daily">Daily</button>
+          <button class="segment" type="button" data-timeframe="weekly">Weekly</button>
+          <button class="segment" type="button" data-timeframe="monthly">Monthly</button>
+        </div>
+        <button class="icon-button" type="button" id="refreshButton" aria-label="Refresh market data" title="Refresh market data">
+          ↻
+        </button>
+        <label class="ema-control">
+          <span>Length</span>
+          <select id="lengthPeriod" aria-label="RS ratio EMA length">
+            <option value="10">10</option>
+            <option value="14" selected>14</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="150">150</option>
+            <option value="200">200</option>
+          </select>
+        </label>
+        <label class="ema-control">
+          <span>Smooth</span>
+          <select id="smoothPeriod" aria-label="RS smoothing period">
+            <option value="10">10</option>
+            <option value="14">14</option>
+            <option value="20" selected>20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="150">150</option>
+            <option value="200">200</option>
+          </select>
+        </label>
+        <div class="zoom-control" role="group" aria-label="Chart scale">
+          <button class="icon-button" type="button" id="zoomInButton" aria-label="Zoom in chart scale" title="Zoom in">
+            +
+          </button>
+          <output id="zoomValue" aria-live="polite">+/-50</output>
+          <button class="icon-button" type="button" id="zoomOutButton" aria-label="Zoom out chart scale" title="Zoom out">
+            −
+          </button>
+        </div>
+        <label class="tail-control">
+          <span>Tail</span>
+          <input id="tailLength" type="range" min="5" max="40" value="18" />
+          <output id="tailLengthValue">18d</output>
+        </label>
+      </section>
+
+      <section class="workspace">
+        <div class="chart-column">
+          <div class="benchmark-panel" aria-label="SPY price context">
+            <div class="benchmark-bar" id="benchmarkBar">
+              <span>SPY</span>
+              <strong>--</strong>
+              <small>--</small>
+            </div>
+            <svg id="spySparkline" role="img" aria-label="SPY price line"></svg>
+          </div>
+          <div class="chart-stage">
+            <svg id="rrgChart" role="img" aria-label="Relative Rotation Graph chart"></svg>
+            <div class="tooltip hidden" id="tooltip"></div>
+          </div>
+        </div>
+
+        <aside class="side-panel" aria-label="Current rotation details">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">As of</p>
+              <h2 id="selectedDate">--</h2>
+            </div>
+            <div class="quadrant-chip" id="selectedQuadrant">--</div>
+          </div>
+          <div class="selected-card" id="selectedCard">
+            <p>Select a marker to inspect its rotation.</p>
+          </div>
+          <div class="rank-list" id="rankList"></div>
+        </aside>
+      </section>
+
+      <section class="timeline" aria-label="Date slider">
+        <div class="timeline-labels">
+          <span id="startDate">--</span>
+          <strong id="currentDate">--</strong>
+          <span id="endDate">--</span>
+        </div>
+        <div class="date-control-row">
+          <button class="timeline-button" type="button" id="stepBackButton" aria-label="Previous date" title="Previous date">
+            &lt;
+          </button>
+          <input id="dateSlider" type="range" min="0" max="0" value="0" aria-label="Selected chart date" />
+          <button class="timeline-button play-button" type="button" id="playPauseButton" aria-label="Play timeline" title="Play timeline">
+            &#9654;
+          </button>
+          <button class="timeline-button" type="button" id="stepForwardButton" aria-label="Next date" title="Next date">
+            &gt;
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>
