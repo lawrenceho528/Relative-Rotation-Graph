@@ -85,10 +85,32 @@ class StooqProvider:
             text = response.read().decode("utf-8")
 
         rows = []
-        for row in csv.DictReader(text.splitlines()):
-            close = float(row["Close"])
+        reader = csv.DictReader(text.splitlines())
+        available_columns = [field for field in reader.fieldnames or [] if field is not None]
+        normalized_columns = [normalize_csv_key(field) for field in available_columns]
+        missing_columns = [column for column in ("date", "close") if column not in normalized_columns]
+        if missing_columns:
+            print(
+                f"{symbol}: Stooq CSV missing required columns: {', '.join(missing_columns)}. "
+                f"Available columns: {', '.join(available_columns) if available_columns else '(none)'}"
+            )
+            raise RuntimeError(f"{symbol}: Stooq CSV missing required columns")
+
+        for raw_row in reader:
+            row = normalize_csv_row(raw_row)
+            if not any(value for value in row.values()):
+                continue
+            date_value = row.get("date", "")
+            close_value = row.get("close", "")
+            if not date_value or not close_value:
+                continue
+            try:
+                datetime.fromisoformat(date_value)
+                close = float(close_value)
+            except ValueError:
+                continue
             if close > 0:
-                rows.append({"date": row["Date"], "close": round(close, 4)})
+                rows.append({"date": date_value, "close": round(close, 4)})
         if len(rows) < 180:
             raise RuntimeError(f"{symbol}: not enough Stooq rows")
         return rows
@@ -116,6 +138,17 @@ class TiingoProvider:
         if len(rows) < 180:
             raise RuntimeError(f"{symbol}: not enough Tiingo rows")
         return rows
+
+
+def normalize_csv_key(key):
+    return str(key or "").lstrip("\ufeff").strip().lower()
+
+
+def normalize_csv_row(row):
+    normalized = {}
+    for key, value in row.items():
+        normalized[normalize_csv_key(key)] = str(value or "").strip()
+    return normalized
 
 
 def main():
