@@ -183,6 +183,7 @@ def read_state(ws):
           rankRows: document.querySelectorAll('.rank-row').length,
           hiddenRows: document.querySelectorAll('.rank-row.hidden-symbol').length,
           activeUniverse: document.querySelector('[data-universe].active')?.dataset.universe || '',
+          fallbackSymbols: document.documentElement.dataset.generatedFallbackSymbols || '',
           sliderValue: Number(document.querySelector('#dateSlider')?.value || 0),
           sliderMax: Number(document.querySelector('#dateSlider')?.max || 0)
         })

@@ -276,6 +276,7 @@ def main():
             price_field = "close"
             warnings = [f"{provider.name} failed; used existing local data fallback"]
 
+    fill_missing_symbols(rows_by_symbol, warnings)
     rows_by_symbol = {symbol: rows[-HISTORY_LIMIT:] for symbol, rows in rows_by_symbol.items()}
     generated_at = date.today().isoformat()
     data_as_of = latest_common_date(rows_by_symbol) or generated_at
@@ -356,6 +357,19 @@ def load_existing_rows():
         if symbol not in rows_by_symbol and symbol != BENCHMARK["symbol"]:
             rows_by_symbol[symbol] = generate_sample_rows(symbol, benchmark_rows)
     return rows_by_symbol
+
+
+def fill_missing_symbols(rows_by_symbol, warnings):
+    benchmark_rows = rows_by_symbol.get(BENCHMARK["symbol"])
+    if not benchmark_rows:
+        return
+    for symbol in SYMBOLS:
+        if symbol == BENCHMARK["symbol"] or symbol in rows_by_symbol:
+            continue
+        warning = f"{symbol}: generated offline sample rows because provider data was unavailable"
+        warnings.append(warning)
+        print(f"WARNING: {warning}")
+        rows_by_symbol[symbol] = generate_sample_rows(symbol, benchmark_rows)
 
 
 def normalize_existing_price_rows(rows):

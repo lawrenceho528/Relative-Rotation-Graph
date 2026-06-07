@@ -417,6 +417,7 @@ async function loadSameOriginHistories(symbols, forceRefresh) {
   const payload = await response.json();
   const rowsBySymbol = payload.symbols ?? {};
   const histories = new Map();
+  const missingSymbols = [];
 
   symbols.forEach((symbol) => {
     const rows = rowsBySymbol[symbol];
@@ -424,16 +425,32 @@ async function loadSameOriginHistories(symbols, forceRefresh) {
       if (symbol === BENCHMARK.symbol) {
         throw new Error(`Generated RRG data missing benchmark ${symbol}`);
       }
+      missingSymbols.push(symbol);
       return;
     }
 
-    histories.set(
-      symbol,
-      rows
-        .map((row) => ({ date: row.date, close: Number(row.close) }))
-        .filter((row) => /^\d{4}-\d{2}-\d{2}$/.test(row.date) && Number.isFinite(row.close) && row.close > 0)
-    );
+    const normalizedRows = normalizeHistoryRows(rows);
+    if (normalizedRows.length < 180) {
+      if (symbol === BENCHMARK.symbol) {
+        throw new Error(`Generated RRG data has invalid benchmark rows for ${symbol}`);
+      }
+      missingSymbols.push(symbol);
+      return;
+    }
+
+    histories.set(symbol, normalizedRows);
   });
+
+  const benchmarkHistory = histories.get(BENCHMARK.symbol);
+  if (benchmarkHistory?.length && missingSymbols.length) {
+    const benchmarkDates = benchmarkHistory.map((row) => row.date);
+    missingSymbols.forEach((symbol) => {
+      histories.set(symbol, generateSeries(symbol, benchmarkDates, benchmarkHistory));
+    });
+    document.documentElement.dataset.generatedFallbackSymbols = missingSymbols.join(",");
+  } else {
+    document.documentElement.dataset.generatedFallbackSymbols = "";
+  }
 
   return {
     histories,
@@ -444,6 +461,12 @@ async function loadSameOriginHistories(symbols, forceRefresh) {
       priceField: payload.priceField ?? "adjusted close"
     }
   };
+}
+
+function normalizeHistoryRows(rows) {
+  return rows
+    .map((row) => ({ date: row.date, close: Number(row.close) }))
+    .filter((row) => /^\d{4}-\d{2}-\d{2}$/.test(row.date) && Number.isFinite(row.close) && row.close > 0);
 }
 
 function buildFallbackHistories(symbols) {
