@@ -59,7 +59,7 @@ def main():
             assert_true(dom_state["sparklineRole"] == "img", "SPY sparkline role is not img")
             assert_true(dom_state["sparklineLabel"] == "SPY price line", "SPY sparkline accessible label is missing")
             assert_true(dom_state["refreshLabel"] == "Refresh market data", "Refresh button label is missing")
-            assert_true(dom_state["universeButtons"] == ["Sectors", "Industries"], "Universe button text changed")
+            assert_true(dom_state["universeButtons"] == ["Sectors", "Industries", "Indices"], "Universe button text changed")
             assert_true(dom_state["timeframeButtons"] == ["Daily", "Weekly", "Monthly"], "Timeframe button text changed")
             assert_true(dom_state["benchmarkBar"].startswith("SPY $"), f"SPY benchmark bar missing price: {dom_state}")
             assert_true(ax_state["buttons"] >= 7, f"Expected at least 7 accessible buttons: {ax_state}")

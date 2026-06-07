@@ -147,6 +147,11 @@ h2 {
   background: #111827;
 }
 
+.segmented[aria-label="Universe"] {
+  grid-template-columns: repeat(3, 1fr);
+  min-width: 330px;
+}
+
 .timeframe-segmented {
   grid-template-columns: repeat(3, 1fr);
   min-width: 300px;
@@ -180,13 +185,6 @@ h2 {
   font-size: 1.25rem;
 }
 
-.zoom-control {
-  display: inline-grid;
-  grid-template-columns: 42px minmax(54px, auto) 42px;
-  align-items: center;
-  gap: 8px;
-}
-
 .ema-control {
   display: inline-grid;
   grid-template-columns: auto 86px;
@@ -204,14 +202,6 @@ h2 {
   color: var(--text);
   background: #111827;
   cursor: pointer;
-}
-
-.zoom-control output {
-  min-width: 54px;
-  color: var(--muted);
-  font-size: 0.86rem;
-  text-align: center;
-  white-space: nowrap;
 }
 
 .tail-control {
@@ -331,12 +321,13 @@ input[type="range"] {
 .side-panel {
   min-height: 0;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 12px;
 }
 
 .panel-header,
 .selected-card,
+.visibility-actions,
 .rank-list {
   background: var(--surface);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -392,6 +383,27 @@ input[type="range"] {
   display: block;
   margin-top: 3px;
   color: var(--text);
+}
+
+.visibility-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 10px;
+}
+
+.panel-action {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #111827;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.panel-action:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .rank-list {
@@ -544,11 +556,20 @@ input[type="range"] {
 
   .side-panel {
     grid-template-columns: minmax(240px, 0.75fr) minmax(260px, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
   }
 
   .panel-header {
     grid-column: 1 / -1;
+  }
+
+  .selected-card {
+    grid-row: 2 / 4;
+  }
+
+  .visibility-actions,
+  .rank-list {
+    grid-column: 2;
   }
 }
 
@@ -619,8 +640,7 @@ input[type="range"] {
 
   .segmented,
   .ema-control,
-  .tail-control,
-  .zoom-control {
+  .tail-control {
     width: 100%;
     max-width: none;
   }
@@ -629,10 +649,7 @@ input[type="range"] {
     grid-template-columns: auto minmax(120px, 1fr);
   }
 
-  .zoom-control {
-    grid-template-columns: 42px minmax(54px, 1fr) 42px;
-  }
-
+  .segmented[aria-label="Universe"],
   .timeframe-segmented {
     min-width: 0;
   }
@@ -661,6 +678,13 @@ input[type="range"] {
   .side-panel {
     display: grid;
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto minmax(180px, 1fr);
+    grid-template-rows: auto auto auto minmax(180px, 1fr);
+  }
+
+  .selected-card,
+  .visibility-actions,
+  .rank-list {
+    grid-column: auto;
+    grid-row: auto;
   }
 }

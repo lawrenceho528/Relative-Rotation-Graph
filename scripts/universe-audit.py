@@ -37,6 +37,13 @@ EXPECTED_INDUSTRY_GROUPS = {
     "Utilities",
 }
 
+EXPECTED_INDICES = {
+    "SPX": "S&P 500 Index",
+    "NDX": "Nasdaq 100 Index",
+    "IWM": "Russell 2000 ETF",
+    "DJI": "Dow Jones Industrial Average",
+}
+
 
 def main():
     app_text = APP_PATH.read_text(encoding="utf-8")
@@ -45,9 +52,10 @@ def main():
 
     sectors = extract_universe(app_text, "sectors")
     industries = extract_universe(app_text, "industries")
+    indices = extract_universe(app_text, "indices")
     updater_symbols = extract_updater_symbols(updater_text)
     data_symbols = set(data.get("symbols", {}).keys())
-    app_symbols = {"SPY", *sectors.keys(), *industries.keys()}
+    app_symbols = {"SPY", *sectors.keys(), *industries.keys(), *indices.keys()}
 
     if {symbol: item["name"] for symbol, item in sectors.items()} != EXPECTED_SECTORS:
         raise AssertionError(f"sector universe does not match expected GICS sector proxies: {sectors}")
@@ -60,6 +68,10 @@ def main():
     missing_groups = EXPECTED_INDUSTRY_GROUPS - {item["group"] for item in industries.values()}
     if missing_groups:
         raise AssertionError(f"industry universe is missing parent GICS sector groups: {sorted(missing_groups)}")
+    if {symbol: item["name"] for symbol, item in indices.items()} != EXPECTED_INDICES:
+        raise AssertionError(f"indices universe does not match expected symbols: {indices}")
+    if {item["group"] for item in indices.values()} != {"Market Index"}:
+        raise AssertionError("indices universe entries must be identified as Market Index proxies")
 
     missing_from_updater = sorted(app_symbols - updater_symbols)
     missing_from_data = sorted(app_symbols - data_symbols)
@@ -73,7 +85,7 @@ def main():
 
     print(
         "Universe audit passed: "
-        f"sectors={len(sectors)} industries={len(industries)} dataSymbols={len(data_symbols)}"
+        f"sectors={len(sectors)} industries={len(industries)} indices={len(indices)} dataSymbols={len(data_symbols)}"
     )
 
 
@@ -95,10 +107,16 @@ def extract_universe(text, key):
 def extract_updater_symbols(text):
     sectors = re.search(r"SECTORS\s*=\s*(\[[^\]]+\])", text, re.S)
     industries = re.search(r"INDUSTRIES\s*=\s*(\[[^\]]+\])", text, re.S)
-    if not sectors or not industries:
-        raise AssertionError("could not find SECTORS and INDUSTRIES in update_rrg_data.py")
+    indices = re.search(r"INDICES\s*=\s*(\[[^\]]+\])", text, re.S)
+    if not sectors or not industries or not indices:
+        raise AssertionError("could not find SECTORS, INDUSTRIES, and INDICES in update_rrg_data.py")
 
-    return {"SPY", *[row[0] for row in ast.literal_eval(sectors.group(1))], *[row[0] for row in ast.literal_eval(industries.group(1))]}
+    return {
+        "SPY",
+        *[row[0] for row in ast.literal_eval(sectors.group(1))],
+        *[row[0] for row in ast.literal_eval(industries.group(1))],
+        *[row[0] for row in ast.literal_eval(indices.group(1))],
+    }
 
 
 if __name__ == "__main__":

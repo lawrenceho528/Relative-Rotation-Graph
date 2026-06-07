@@ -53,10 +53,6 @@ def main():
             move_date_slider(ws)
             wait_until(ws, lambda state: state["rankRows"] == initial["rankRows"] and state["circles"] == initial["circles"])
             after_slider = read_state(ws)
-            click_zoom_in(ws)
-            after_zoom_in = read_state(ws)
-            click_zoom_out(ws)
-            after_zoom_out = read_state(ws)
             pinch_zoom_in(ws)
             after_pinch_zoom_in = read_state(ws)
             pinch_zoom_out(ws)
@@ -69,7 +65,14 @@ def main():
             after_hide = read_state(ws)
             toggle_first_symbol(ws)
             after_show = read_state(ws)
+            click_hide_all(ws)
+            after_hide_all = read_state(ws)
+            click_show_all(ws)
+            after_show_all = read_state(ws)
+            switch_indices(ws)
+            after_indices = read_state(ws)
 
+            assert_true(initial["zoomButtons"] == 0, f"Manual zoom buttons should be removed: {initial}")
             assert_true(initial["chartExtent"] == 10, f"Expected default fixed extent 10, got {initial}")
             assert_true(
                 initial["chartMin"] == 90 and initial["chartMax"] == 110,
@@ -83,18 +86,8 @@ def main():
                 after_slider["chartExtent"] == initial["chartExtent"],
                 f"Date changes should not auto-scale the chart: {after_slider}",
             )
-            assert_true(after_zoom_in["chartExtent"] == 9, f"Zoom in did not reduce extent: {after_zoom_in}")
             assert_true(
-                after_zoom_in["chartMin"] == 91 and after_zoom_in["chartMax"] == 109,
-                f"Zoom in did not narrow to 91-109: {after_zoom_in}",
-            )
-            assert_true(after_zoom_out["chartExtent"] == 10, f"Zoom out did not restore extent: {after_zoom_out}")
-            assert_true(
-                after_zoom_out["chartMin"] == 90 and after_zoom_out["chartMax"] == 110,
-                f"Zoom out did not restore 90-110: {after_zoom_out}",
-            )
-            assert_true(
-                after_pinch_zoom_in["chartExtent"] < after_zoom_out["chartExtent"],
+                after_pinch_zoom_in["chartExtent"] < after_slider["chartExtent"],
                 f"Pinch out did not zoom in: {after_pinch_zoom_in}",
             )
             assert_true(
@@ -134,16 +127,30 @@ def main():
             assert_true(after_hide["hiddenRows"] == 1, f"Expected one hidden row, got {after_hide}")
             assert_true(after_show["circles"] == initial["circles"], f"Show did not restore marker count: {after_show}")
             assert_true(after_show["hiddenRows"] == 0, f"Expected no hidden rows after restore: {after_show}")
+            assert_true(after_hide_all["circles"] == 0, f"Hide All did not hide every marker: {after_hide_all}")
+            assert_true(
+                after_hide_all["rankRows"] == initial["rankRows"] and after_hide_all["hiddenRows"] == initial["rankRows"],
+                f"Hide All should keep rows visible and mark all hidden: {after_hide_all}",
+            )
+            assert_true(
+                after_show_all["circles"] == initial["circles"] and after_show_all["hiddenRows"] == 0,
+                f"Show All did not restore every marker: {after_show_all}",
+            )
+            assert_true(
+                after_indices["activeUniverse"] == "indices" and after_indices["rankRows"] == 4 and after_indices["circles"] == 4,
+                f"Indices universe did not render SPX, NDX, IWM, DJI: {after_indices}",
+            )
 
             print(
                 "Chart controls audit passed: "
-                f"extent {initial['chartExtent']}->{after_zoom_in['chartExtent']}->{after_zoom_out['chartExtent']} "
-                f"pinch {after_pinch_zoom_in['chartExtent']}->{after_pinch_zoom_out['chartExtent']} "
+                f"extent {initial['chartExtent']} "
+                f"pinch {after_slider['chartExtent']}->{after_pinch_zoom_in['chartExtent']}->{after_pinch_zoom_out['chartExtent']} "
                 f"pan {after_pinch_zoom_out['chartCenterX']}/{after_pinch_zoom_out['chartCenterY']}->"
                 f"{after_pan['chartCenterX']}/{after_pan['chartCenterY']} "
                 f"twoFinger {after_pan['chartExtent']}->{after_two_finger['chartExtent']} "
                 f"plot={initial['plotWidth']}x{initial['plotHeight']} "
-                f"markers {initial['circles']}->{after_hide['circles']}->{after_show['circles']}"
+                f"markers {initial['circles']}->{after_hide['circles']}->{after_show['circles']} "
+                f"all {after_hide_all['circles']}->{after_show_all['circles']} indices={after_indices['circles']}"
             )
         finally:
             ws.close()
@@ -169,12 +176,13 @@ def read_state(ws):
           chartMax: Number(document.querySelector('#rrgChart')?.dataset.chartMax || 0),
           chartMinY: Number(document.querySelector('#rrgChart')?.dataset.chartMinY || 0),
           chartMaxY: Number(document.querySelector('#rrgChart')?.dataset.chartMaxY || 0),
-          zoomValue: document.querySelector('#zoomValue')?.value || '',
+          zoomButtons: document.querySelectorAll('#zoomInButton, #zoomOutButton, #zoomValue').length,
           plotWidth: Number(document.querySelector('#rrgChart')?.dataset.plotWidth || 0),
           plotHeight: Number(document.querySelector('#rrgChart')?.dataset.plotHeight || 0),
           circles: document.querySelectorAll('#rrgChart circle[data-symbol]').length,
           rankRows: document.querySelectorAll('.rank-row').length,
           hiddenRows: document.querySelectorAll('.rank-row.hidden-symbol').length,
+          activeUniverse: document.querySelector('[data-universe].active')?.dataset.universe || '',
           sliderValue: Number(document.querySelector('#dateSlider')?.value || 0),
           sliderMax: Number(document.querySelector('#dateSlider')?.max || 0)
         })
@@ -195,32 +203,6 @@ def move_date_slider(ws):
         """,
     )
     time.sleep(0.2)
-
-
-def click_zoom_in(ws):
-    evaluate_json(
-        ws,
-        """
-        (() => {
-          document.querySelector('#zoomInButton').click();
-          return JSON.stringify({ ok: true });
-        })()
-        """,
-    )
-    time.sleep(0.1)
-
-
-def click_zoom_out(ws):
-    evaluate_json(
-        ws,
-        """
-        (() => {
-          document.querySelector('#zoomOutButton').click();
-          return JSON.stringify({ ok: true });
-        })()
-        """,
-    )
-    time.sleep(0.1)
 
 
 def pinch_zoom_in(ws):
@@ -344,6 +326,45 @@ def toggle_first_symbol(ws):
         """,
     )
     time.sleep(0.15)
+
+
+def click_hide_all(ws):
+    evaluate_json(
+        ws,
+        """
+        (() => {
+          document.querySelector('#hideAllButton').click();
+          return JSON.stringify({ ok: true });
+        })()
+        """,
+    )
+    time.sleep(0.15)
+
+
+def click_show_all(ws):
+    evaluate_json(
+        ws,
+        """
+        (() => {
+          document.querySelector('#showAllButton').click();
+          return JSON.stringify({ ok: true });
+        })()
+        """,
+    )
+    time.sleep(0.15)
+
+
+def switch_indices(ws):
+    evaluate_json(
+        ws,
+        """
+        (() => {
+          document.querySelector('[data-universe="indices"]').click();
+          return JSON.stringify({ ok: true });
+        })()
+        """,
+    )
+    wait_until(ws, lambda state: state["activeUniverse"] == "indices" and state["rankRows"] == 4)
 
 
 def wait_until(ws, predicate):

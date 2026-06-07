@@ -69,6 +69,12 @@ const UNIVERSES = {
     ["XHE", "Health Care Equipment", "#5d99d6", "Health Care"],
     ["XHS", "Health Care Services", "#8c74d6", "Health Care"],
     ["XAR", "Aerospace & Defense Equal Weight", "#ad8f42", "Industrials"]
+  ].map(toAsset),
+  indices: [
+    ["SPX", "S&P 500 Index", "#55a7ff", "Market Index"],
+    ["NDX", "Nasdaq 100 Index", "#7c83fd", "Market Index"],
+    ["IWM", "Russell 2000 ETF", "#f38b5b", "Market Index"],
+    ["DJI", "Dow Jones Industrial Average", "#d6ae3d", "Market Index"]
   ].map(toAsset)
 };
 
@@ -121,9 +127,8 @@ const els = {
   endDate: document.querySelector("#endDate"),
   tooltip: document.querySelector("#tooltip"),
   refreshButton: document.querySelector("#refreshButton"),
-  zoomInButton: document.querySelector("#zoomInButton"),
-  zoomOutButton: document.querySelector("#zoomOutButton"),
-  zoomValue: document.querySelector("#zoomValue"),
+  hideAllButton: document.querySelector("#hideAllButton"),
+  showAllButton: document.querySelector("#showAllButton"),
   stepBackButton: document.querySelector("#stepBackButton"),
   playPauseButton: document.querySelector("#playPauseButton"),
   stepForwardButton: document.querySelector("#stepForwardButton")
@@ -179,12 +184,8 @@ els.smoothPeriod.addEventListener("change", () => {
   stopPlayback();
   rebuildCurrentModel();
 });
-els.zoomInButton.addEventListener("click", () => {
-  setChartExtent(state.chartExtent - SCALE_LIMITS.step);
-});
-els.zoomOutButton.addEventListener("click", () => {
-  setChartExtent(state.chartExtent + SCALE_LIMITS.step);
-});
+els.hideAllButton.addEventListener("click", hideAllSymbols);
+els.showAllButton.addEventListener("click", showAllSymbols);
 
 els.stepBackButton.addEventListener("click", () => {
   stopPlayback();
@@ -661,6 +662,7 @@ function render() {
   updateTimelineButtons();
   renderChart(currentPoints);
   renderDetails(allCurrentPoints, currentPoints);
+  updateVisibilityActions(allCurrentPoints, currentPoints);
 }
 
 function updateBenchmarkBar(date) {
@@ -1004,6 +1006,26 @@ function toggleSymbolVisibility(symbol) {
   render();
 }
 
+function hideAllSymbols() {
+  if (!state.model) return;
+  state.model.series.forEach((item) => state.hiddenSymbols.add(item.symbol));
+  render();
+}
+
+function showAllSymbols() {
+  if (!state.model) return;
+  state.hiddenSymbols.clear();
+  if (!state.model.series.some((item) => item.symbol === state.selectedSymbol)) {
+    state.selectedSymbol = state.model.series[0]?.symbol ?? state.selectedSymbol;
+  }
+  render();
+}
+
+function updateVisibilityActions(allCurrentPoints, currentPoints) {
+  els.hideAllButton.disabled = allCurrentPoints.length === 0 || currentPoints.length === 0;
+  els.showAllButton.disabled = allCurrentPoints.length === 0 || currentPoints.length === allCurrentPoints.length;
+}
+
 function setChartExtent(extent) {
   state.chartExtent = Number(clamp(extent, SCALE_LIMITS.min, SCALE_LIMITS.max).toFixed(2));
   updateZoomOutput();
@@ -1011,12 +1033,9 @@ function setChartExtent(extent) {
 }
 
 function updateZoomOutput() {
-  els.zoomValue.value = `+/-${formatExtent(state.chartExtent)}`;
   document.documentElement.dataset.chartExtent = String(state.chartExtent);
   document.documentElement.dataset.chartCenterX = formatChartNumber(state.chartCenterX);
   document.documentElement.dataset.chartCenterY = formatChartNumber(state.chartCenterY);
-  els.zoomInButton.disabled = state.chartExtent <= SCALE_LIMITS.min;
-  els.zoomOutButton.disabled = state.chartExtent >= SCALE_LIMITS.max;
 }
 
 function formatExtent(extent) {
@@ -1282,6 +1301,7 @@ function updateTimelineButtons() {
 
 function assetSubtitle(asset) {
   if (!asset?.group) return "";
+  if (state.universeKey === "indices") return asset.group;
   return state.universeKey === "sectors" ? asset.group : `${asset.group} industry proxy`;
 }
 

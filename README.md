@@ -1,11 +1,11 @@
-# RGG Rotation
+# RRG
 
-Interactive iPad-ready Relative Rotation Graph for U.S. equity sector and industry rotation.
+Interactive iPad-ready Relative Rotation Graph for U.S. equity sector, industry, and index rotation.
 
 ## What It Builds
 
 - A static Progressive Web App that can be hosted on GitHub Pages and added to the iPad Home Screen from Safari.
-- RRG-style sector and industry rotation against `SPY`.
+- RRG-style sector, industry, and index rotation against `SPY`.
 - Date control through the timeline slider and previous/play/next buttons.
 - Graph panning by pressing and dragging inside the chart.
 - Continuous two-finger graph zoom and pan inside the chart.
@@ -110,8 +110,8 @@ Length and Smooth are selectable from `10`, `14`, `20`, `50`, `100`, `150`, and 
 
 Ticker lists live in two places and should be kept in sync:
 
-- `src/app.js`: update the `UNIVERSES` sector or industry entries for the UI label, color, and group.
-- `scripts/update_rrg_data.py`: update `SECTORS` or `INDUSTRIES` so the workflow downloads and writes data for the same symbols.
+- `src/app.js`: update the `UNIVERSES` sector, industry, or index entries for the UI label, color, and group.
+- `scripts/update_rrg_data.py`: update `SECTORS`, `INDUSTRIES`, or `INDICES` so the workflow downloads and writes data for the same symbols.
 
 After changing tickers, run:
 

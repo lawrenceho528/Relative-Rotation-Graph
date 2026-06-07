@@ -73,7 +73,19 @@ INDUSTRIES = [
     ("XAR", "Aerospace & Defense Equal Weight", "#ad8f42", "Industrials"),
 ]
 
-SYMBOLS = [BENCHMARK["symbol"], *[row[0] for row in SECTORS], *[row[0] for row in INDUSTRIES]]
+INDICES = [
+    ("SPX", "S&P 500 Index", "#55a7ff", "Market Index"),
+    ("NDX", "Nasdaq 100 Index", "#7c83fd", "Market Index"),
+    ("IWM", "Russell 2000 ETF", "#f38b5b", "Market Index"),
+    ("DJI", "Dow Jones Industrial Average", "#d6ae3d", "Market Index"),
+]
+
+SYMBOLS = [
+    BENCHMARK["symbol"],
+    *[row[0] for row in SECTORS],
+    *[row[0] for row in INDUSTRIES],
+    *[row[0] for row in INDICES],
+]
 TIINGO_SECRET_HELP = (
     "TIINGO_API_KEY is missing. Add it in GitHub at "
     "Settings -> Secrets and variables -> Actions -> New repository secret, "
@@ -325,14 +337,65 @@ def load_existing_rows():
     if not LEGACY_DATA.exists():
         raise FileNotFoundError(f"Missing {LEGACY_DATA}")
     payload = json.loads(LEGACY_DATA.read_text(encoding="utf-8"))
-    return {
-        symbol: [
-            {"date": row["date"], "close": round(float(row["close"]), 4)}
-            for row in payload["symbols"][symbol]
-            if row.get("date") and row.get("close")
-        ]
-        for symbol in SYMBOLS
-    }
+    source_symbols = payload.get("symbols", {})
+    rows_by_symbol = {}
+    for symbol in SYMBOLS:
+        rows = source_symbols.get(symbol)
+        if rows:
+            rows_by_symbol[symbol] = normalize_existing_price_rows(rows)
+            continue
+        if symbol == BENCHMARK["symbol"]:
+            raise KeyError(f"{symbol}: missing benchmark rows in {LEGACY_DATA}")
+        print(f"WARNING: {symbol}: missing from existing local data; generating offline sample rows")
+
+    benchmark_rows = rows_by_symbol.get(BENCHMARK["symbol"])
+    if not benchmark_rows:
+        raise RuntimeError(f"{BENCHMARK['symbol']}: missing benchmark rows in {LEGACY_DATA}")
+
+    for symbol in SYMBOLS:
+        if symbol not in rows_by_symbol and symbol != BENCHMARK["symbol"]:
+            rows_by_symbol[symbol] = generate_sample_rows(symbol, benchmark_rows)
+    return rows_by_symbol
+
+
+def normalize_existing_price_rows(rows):
+    normalized = []
+    for row in rows:
+        try:
+            close = float(row.get("close"))
+        except (TypeError, ValueError):
+            continue
+        if row.get("date") and close > 0:
+            normalized.append({"date": row["date"], "close": round(close, 4)})
+    return normalized
+
+
+def generate_sample_rows(symbol, benchmark_rows):
+    seed = hash_symbol(symbol)
+    price = 70 + (seed % 90)
+    phase = (seed % 360) * (math.pi / 180)
+    drift = 0.00014 + ((seed % 11) - 5) * 0.000015
+    beta = 0.78 + (seed % 50) / 100
+    rows = []
+    for index, benchmark_row in enumerate(benchmark_rows):
+        if index:
+            previous = benchmark_rows[index - 1]["close"]
+            current = benchmark_row["close"]
+            market_return = current / previous - 1 if previous else 0
+        else:
+            market_return = 0
+        cycle = math.sin(index / (34 + (seed % 28)) + phase) * 0.006
+        noise = math.sin(index * (0.67 + (seed % 9) / 30) + phase * 2) * 0.004
+        price *= 1 + market_return * beta + drift + cycle + noise
+        rows.append({"date": benchmark_row["date"], "close": round(price, 4)})
+    return rows
+
+
+def hash_symbol(symbol):
+    value = 17
+    for char in symbol:
+        value = value * 31 + ord(char)
+    return value
 
 
 def latest_common_date(rows_by_symbol):

@@ -8,9 +8,9 @@
     />
     <meta name="theme-color" content="#182033" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="RGG Rotation" />
+    <meta name="apple-mobile-web-app-title" content="RRG" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>RGG Rotation</title>
+    <title>RRG</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
@@ -21,7 +21,7 @@
       <header class="topbar">
         <div>
           <p class="eyebrow">U.S. equities vs SPY</p>
-          <h1>Relative Rotation Graph</h1>
+          <h1>RRG</h1>
         </div>
         <div class="topbar-meta">
           <div class="status-pill" id="dataStatus">Preparing data...</div>
@@ -33,6 +33,7 @@
         <div class="segmented" role="group" aria-label="Universe">
           <button class="segment active" type="button" data-universe="sectors">Sectors</button>
           <button class="segment" type="button" data-universe="industries">Industries</button>
+          <button class="segment" type="button" data-universe="indices">Indices</button>
         </div>
         <div class="segmented timeframe-segmented" role="group" aria-label="Timeframe">
           <button class="segment active" type="button" data-timeframe="daily">Daily</button>
@@ -66,15 +67,6 @@
             <option value="200">200</option>
           </select>
         </label>
-        <div class="zoom-control" role="group" aria-label="Chart scale">
-          <button class="icon-button" type="button" id="zoomInButton" aria-label="Zoom in chart scale" title="Zoom in">
-            +
-          </button>
-          <output id="zoomValue" aria-live="polite">+/-50</output>
-          <button class="icon-button" type="button" id="zoomOutButton" aria-label="Zoom out chart scale" title="Zoom out">
-            −
-          </button>
-        </div>
         <label class="tail-control">
           <span>Tail</span>
           <input id="tailLength" type="range" min="5" max="40" value="18" />
@@ -108,6 +100,10 @@
           </div>
           <div class="selected-card" id="selectedCard">
             <p>Select a marker to inspect its rotation.</p>
+          </div>
+          <div class="visibility-actions" role="group" aria-label="Symbol visibility">
+            <button class="panel-action" type="button" id="hideAllButton">Hide All</button>
+            <button class="panel-action" type="button" id="showAllButton">Show All</button>
           </div>
           <div class="rank-list" id="rankList"></div>
         </aside>

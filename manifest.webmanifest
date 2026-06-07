@@ -1,7 +1,7 @@
 {
-  "name": "RGG Rotation",
-  "short_name": "RGG Rotation",
-  "description": "Interactive Relative Rotation Graph for U.S. sectors and industries.",
+  "name": "RRG",
+  "short_name": "RRG",
+  "description": "Interactive Relative Rotation Graph for U.S. sectors, industries, and indices.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
