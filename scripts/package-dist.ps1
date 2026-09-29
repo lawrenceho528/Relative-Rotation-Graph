@@ -37,7 +37,7 @@ $zipStream = [System.IO.File]::Open($zipPath, [System.IO.FileMode]::CreateNew)
 try {
   $archive = [System.IO.Compression.ZipArchive]::new($zipStream, [System.IO.Compression.ZipArchiveMode]::Create)
   try {
-    $files = Get-ChildItem -LiteralPath $dist -Recurse -File | Sort-Object FullName
+    $files = Get-ChildItem -LiteralPath $dist -Recurse -File -Force | Sort-Object FullName
     foreach ($file in $files) {
       $entryName = $file.FullName.Substring($distRoot.Length + 1).Replace("\", "/")
       $entry = $archive.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)

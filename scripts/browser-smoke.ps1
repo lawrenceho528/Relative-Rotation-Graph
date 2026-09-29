@@ -1,22 +1,73 @@
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
-$chromeCandidates = @(
-  "C:\Program Files\Google\Chrome\Application\chrome.exe",
-  "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
-)
-$browser = $chromeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 
-if (-not $browser) {
-  throw "No Chrome or Edge executable found for browser smoke test."
+$pythonCommand = Get-Command python -ErrorAction SilentlyContinue
+if (-not $pythonCommand) {
+  $pythonCommand = Get-Command python3 -ErrorAction SilentlyContinue
 }
+if (-not $pythonCommand) {
+  throw "Neither python nor python3 was found on PATH."
+}
+$python = $pythonCommand.Source
+
+function Find-Browser {
+  $override = $env:RGG_BROWSER
+  if ($override) {
+    if (Test-Path -LiteralPath $override -PathType Leaf) { return (Resolve-Path $override).Path }
+    $resolved = (Get-Command $override -ErrorAction SilentlyContinue).Source
+    if ($resolved) { return $resolved }
+    throw "RGG_BROWSER='$override' is not an executable browser."
+  }
+
+  $candidates = @(
+    "C:\Program Files\Google\Chrome\Application\chrome.exe",
+    "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+    "C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+    "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+  )
+  foreach ($candidate in $candidates) {
+    if (Test-Path $candidate) { return $candidate }
+  }
+
+  foreach ($name in @("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "chrome", "msedge")) {
+    $resolved = (Get-Command $name -ErrorAction SilentlyContinue).Source
+    if ($resolved) { return $resolved }
+  }
+
+  $roots = @()
+  if ($env:PLAYWRIGHT_BROWSERS_PATH) { $roots += $env:PLAYWRIGHT_BROWSERS_PATH }
+  $roots += Join-Path $HOME ".cache/ms-playwright"
+  if ($env:LOCALAPPDATA) { $roots += Join-Path $env:LOCALAPPDATA "ms-playwright" }
+  else { $roots += Join-Path $HOME "AppData/Local/ms-playwright" }
+
+  $patterns = @(
+    "chromium-*/chrome-linux*/chrome",
+    "chromium-*/chrome-win*/chrome.exe",
+    "chromium_headless_shell-*/chrome-linux*/headless_shell"
+  )
+  foreach ($rootDir in $roots) {
+    if (-not (Test-Path $rootDir)) { continue }
+    foreach ($pattern in $patterns) {
+      $expected = Join-Path $rootDir $pattern
+      $match = Get-ChildItem -Path $rootDir -Recurse -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -like $expected } |
+        Sort-Object FullName | Select-Object -Last 1
+      if ($match) { return $match.FullName }
+    }
+  }
+
+  throw "No Chrome, Edge, or Chromium executable found. Install google-chrome or chromium, or point RGG_BROWSER at an executable."
+}
+
+$browser = Find-Browser
 
 $domPath = Join-Path $root "chrome-dom.txt"
 $job = Start-Job -ScriptBlock {
-  param($AppRoot)
+  param($AppRoot, $Python)
   Set-Location $AppRoot
-  python -m http.server 4173 --bind 127.0.0.1
-} -ArgumentList $root
+  & $Python -m http.server 4173 --bind 127.0.0.1
+} -ArgumentList $root, $python
 
 try {
   Start-Sleep -Seconds 2

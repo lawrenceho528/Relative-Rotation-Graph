@@ -196,6 +196,8 @@ def choose_marker_symbol(ws):
                 x: rect.x + rect.width / 2,
                 y: rect.y + rect.height / 2,
                 visible: rect.width > 0 && rect.height > 0
+                  && rect.x >= 0 && rect.y >= 0
+                  && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight
               };
             })
             .filter((item) => item.symbol && item.symbol !== current && item.visible);

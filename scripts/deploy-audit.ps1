@@ -59,6 +59,6 @@ if (-not $buildInfo.buildId -or $buildInfo.dataGeneratedAt -ne $data.generatedAt
   throw "Dist build identity is missing or not aligned with generated RRG data."
 }
 
-$fileCount = (Get-ChildItem -LiteralPath $dist -Recurse -File).Count
-$bytes = (Get-ChildItem -LiteralPath $dist -Recurse -File | Measure-Object -Property Length -Sum).Sum
+$fileCount = (Get-ChildItem -LiteralPath $dist -Recurse -File -Force).Count
+$bytes = (Get-ChildItem -LiteralPath $dist -Recurse -File -Force | Measure-Object -Property Length -Sum).Sum
 Write-Output "Deploy audit passed: files=$fileCount bytes=$bytes source=$($data.source) generatedAt=$($data.generatedAt) buildId=$($buildInfo.buildId)"

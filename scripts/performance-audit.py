@@ -13,8 +13,10 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
 CAPTURE_PATH = ROOT / "scripts" / "browser-capture.py"
 
-MAX_TOTAL_BYTES = 2_250_000
-MAX_DATA_BYTES = 2_050_000
+# Budgets scale with the approved 95-symbol universe (~45 KB/symbol of real daily
+# closes); timing budgets are unchanged.
+MAX_TOTAL_BYTES = 5_150_000
+MAX_DATA_BYTES = 5_000_000
 MAX_NAVIGATION_MS = 12_000
 MAX_APP_LOAD_MS = 4_000
 MAX_MODEL_BUILD_MS = 1_500

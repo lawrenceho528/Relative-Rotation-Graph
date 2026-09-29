@@ -176,6 +176,8 @@ def read_state(ws):
     expression = """
     JSON.stringify({
       loaded: document.querySelector('#dataStatus')?.textContent.includes('RRG data loaded') || false,
+      unavailableSymbols: document.documentElement.dataset.unavailableSymbols || '',
+      dataGeneratedAt: document.documentElement.dataset.dataGeneratedAt || '',
       circles: document.querySelectorAll('#rrgChart circle[data-symbol]').length,
       tailDots: document.querySelectorAll('#rrgChart circle[data-tail-dot]').length,
       tails: document.querySelectorAll('#rrgChart path[data-tail-path]').length,
@@ -359,7 +361,27 @@ def click_themes(ws):
         })()
         """,
     )
-    wait_until(ws, lambda state: state["activeUniverse"] == "themes" and state["circles"] == 42 and state["selectedSymbol"] == "AIQ")
+    try:
+        wait_until(ws, lambda state: state["activeUniverse"] == "themes" and state["circles"] == 42 and state["selectedSymbol"] == "AIQ")
+    except RuntimeError:
+        diagnostic = evaluate_json(
+            ws,
+            """
+            JSON.stringify((function(){
+              var rows = [];
+              var cards = document.querySelectorAll('.rank-row b');
+              cards.forEach(function(node){ rows.push(node.textContent.trim()); });
+              return {
+                rankSymbols: rows.slice(0, 50),
+                rankCount: rows.length,
+                dataGeneratedAt: document.documentElement.dataset.dataGeneratedAt || '',
+                unavailableSymbols: document.documentElement.dataset.unavailableSymbols || ''
+              };
+            })())
+            """,
+        )
+        print("THEME DIAGNOSTIC:", json.dumps(diagnostic))
+        raise
 
 
 def select_third_rank_row(ws):

@@ -119,7 +119,7 @@ Assert-Check (Test-Path (Join-Path $root "scripts/workflow-audit.py")) "GitHub w
 Assert-Check (Test-Path (Join-Path $root "scripts/performance-audit.py")) "iPad performance and payload audit"
 Assert-Check (Test-Path (Join-Path $root "scripts/ipad-touch-audit.py")) "iPad touch emulation audit"
 Assert-Check (Test-Path (Join-Path $root ".github/workflows/deploy-pages.yml")) "GitHub Pages deployment workflow"
-Assert-Check (Test-Path (Join-Path $root ".github/workflows/update-data-a.yml") -and (Test-Path (Join-Path $root ".github/workflows/update-data-b.yml"))) "two-stage scheduled RRG data workflows"
+Assert-Check ((Test-Path (Join-Path $root ".github/workflows/update-data-a.yml")) -and (Test-Path (Join-Path $root ".github/workflows/update-data-b.yml"))) "two-stage scheduled RRG data workflows"
 Assert-Check (-not (Test-Path (Join-Path $root ".github/workflows/update-data.yml"))) "single sleeping data workflow removed"
 Assert-Check (Test-Path (Join-Path $root "IPAD_INSTALL_CHECKLIST.md")) "iPad install checklist"
 Assert-Check ($targetDevice.Contains('A2993') -and $targetDevice.Contains('iPad mini (A17 Pro)')) "target A2993 iPad mini documented"

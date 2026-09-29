@@ -1173,8 +1173,14 @@ function updateChartPan(event) {
 function nearestPoint(event) {
   if (!state.renderPoints.length) return null;
   const rect = els.chart.getBoundingClientRect();
-  const x = ((event.clientX - rect.left) / rect.width) * 1000;
-  const y = ((event.clientY - rect.top) / rect.height) * 680;
+  // The SVG renders with preserveAspectRatio="xMidYMin meet": uniform scale with
+  // the drawing pinned to the top. Map the pointer into viewBox units through
+  // that scale, otherwise taps on wide/short viewports resolve to markers
+  // tens of units above the touched point.
+  const scale = Math.min(rect.width / 1000, rect.height / 680);
+  const offsetX = (rect.width - 1000 * scale) / 2;
+  const x = (event.clientX - rect.left - offsetX) / scale;
+  const y = (event.clientY - rect.top) / scale;
   const nearest = state.renderPoints
     .map((point) => ({ ...point, distance: Math.hypot(point.x - x, point.y - y) }))
     .sort((a, b) => a.distance - b.distance)[0];

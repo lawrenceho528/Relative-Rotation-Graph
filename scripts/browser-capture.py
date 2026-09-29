@@ -110,18 +110,59 @@ class QuietHTTPServer(ThreadingHTTPServer):
         pass
 
 
+def playwright_browser_roots():
+    roots = []
+    env_root = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
+    if env_root:
+        roots.append(pathlib.Path(env_root))
+    roots.append(pathlib.Path.home() / ".cache" / "ms-playwright")
+    roots.append(pathlib.Path(os.environ.get("LOCALAPPDATA", "")) / "ms-playwright" if os.environ.get("LOCALAPPDATA") else pathlib.Path.home() / "AppData" / "Local" / "ms-playwright")
+    return roots
+
+
 def find_browser():
+    """Cross-platform Chrome/Edge/Chromium discovery for every browser-based audit.
+
+    Order: RGG_BROWSER override, Windows install paths, PATH lookup for the common
+    Linux executables, then the local Playwright browser cache (newest first).
+    """
+    override = os.environ.get("RGG_BROWSER")
+    if override:
+        path = pathlib.Path(override)
+        if path.is_file():
+            return path
+        resolved = shutil.which(override)
+        if resolved:
+            return pathlib.Path(resolved)
+        raise RuntimeError(f"RGG_BROWSER={override!r} is not an executable browser.")
+
     candidates = [
         pathlib.Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
+        pathlib.Path(r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"),
+        pathlib.Path(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"),
         pathlib.Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),
     ]
     for candidate in candidates:
         if candidate.exists():
             return candidate
-    found = shutil.which("chrome") or shutil.which("msedge")
-    if found:
-        return pathlib.Path(found)
-    raise RuntimeError("No Chrome or Edge executable found.")
+
+    for name in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "chrome", "msedge"):
+        found = shutil.which(name)
+        if found:
+            return pathlib.Path(found)
+
+    for root in playwright_browser_roots():
+        if not root.is_dir():
+            continue
+        for pattern in ("chromium-*/chrome-linux*/chrome", "chromium-*/chrome-win*/chrome.exe", "chromium_headless_shell-*/chrome-linux*/headless_shell"):
+            matches = sorted(root.glob(pattern))
+            if matches:
+                return matches[-1]
+
+    raise RuntimeError(
+        "No Chrome, Edge, or Chromium executable found. "
+        "Install google-chrome or chromium, or point RGG_BROWSER at an executable."
+    )
 
 
 def wait_for_page():

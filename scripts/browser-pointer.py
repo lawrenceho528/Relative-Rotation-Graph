@@ -63,8 +63,8 @@ def main():
                 f"Pointer drag on date slider did not change date: {initial} -> {after_slider}",
             )
             assert_true(
-                after_chart["selectedDate"] != after_slider["selectedDate"],
-                f"Pointer drag on chart did not scrub date: {after_slider} -> {after_chart}",
+                after_chart["selectedDate"] == after_slider["selectedDate"],
+                f"Pointer drag on the chart must pan without scrubbing the date: {after_slider} -> {after_chart}",
             )
             assert_true(
                 after_industries["circles"] >= 18 and after_industries["tailDots"] >= 18,
