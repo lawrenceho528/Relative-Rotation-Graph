@@ -611,7 +611,7 @@ Offline audit passed: cacheCount=1 offlineCircles=11 offlineTailDots=187 offline
 - Industry interaction: verified by `scripts/browser-interaction.py` switching from 11 sector markers to 29 industry markers and selecting XTL from the ranking list.
 - StockCharts RRG reference behavior: documented in `REFERENCE_ALIGNMENT.md` and implemented with RS-Ratio on the horizontal axis, RS-Momentum on the vertical axis, four 50-centered quadrants, fading tail history dots, tails, a tail-length slider, a horizontal date slider, previous/next stepping, and timeline playback.
 - RRG tail direction readability: verified by `scripts/browser-smoke.ps1`, `scripts/browser-capture.py`, and pointer/interaction audits checking endpoint markers separately from fading tail history dots.
-- Free daily updated data: verified by `scripts/update_rrg_data.py`, current `public/data/rrg.json`, and `.github/workflows/update-data.yml`.
+- Free daily updated data: verified by `scripts/update_rrg_data.py`, current `public/data/rrg.json`, and the scheduled workflows `.github/workflows/update-data-a.yml` plus `.github/workflows/update-data-b.yml`.
 - Hosted daily data deployment: verified by `.github/workflows/deploy-pages.yml` preparing `dist` and deploying that artifact to GitHub Pages; `scripts/workflow-audit.py` checks this explicitly.
 - Fresh non-synthetic daily data bundle: verified by `scripts/data-freshness-audit.py` checking generation date, SPY latest row, symbol count, minimum history length, and symbol-date alignment.
 - Daily data freshness after install: verified by `scripts/verify.ps1` checking that `service-worker.js` uses a network-first strategy for `data/rrg.json`, with cached fallback for offline use.
