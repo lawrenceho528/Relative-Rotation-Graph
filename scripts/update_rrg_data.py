@@ -1,5 +1,6 @@
 import argparse
 import csv
+import hashlib
 import json
 import math
 import os
@@ -13,6 +14,7 @@ from datetime import date, datetime, timedelta, timezone
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "public" / "data" / "rrg.json"
+MARKER_PATH = ROOT / "public" / "data" / "update-state.json"
 
 BENCHMARK = {"symbol": "SPY", "name": "S&P 500 ETF"}
 DEFAULT_LENGTH = 14
@@ -374,6 +376,100 @@ def update_symbol(symbol, cached_rows, provider, full_refresh):
     return rows[-HISTORY_LIMIT:]
 
 
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(65536), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def load_marker():
+    if not MARKER_PATH.exists():
+        return None
+    return json.loads(MARKER_PATH.read_text(encoding="utf-8"))
+
+
+def write_marker(phase, cycle, batch_symbols, data_as_of, source):
+    marker = {
+        "schemaVersion": 1,
+        "phase": phase,
+        "cycle": cycle.isoformat(),
+        "batch": phase,
+        "batchSize": len(batch_symbols),
+        "symbols": list(batch_symbols),
+        "dataAsOf": data_as_of,
+        "source": source,
+        "completedAtUtc": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "cacheSha256": sha256_file(OUT),
+    }
+    MARKER_PATH.write_text(json.dumps(marker, indent=2) + "\n", encoding="utf-8")
+    print(
+        f"Update marker written: phase={phase} cycle={marker['cycle']} "
+        f"symbols={len(batch_symbols)} cacheSha256={marker['cacheSha256'][:12]}"
+    )
+    return marker
+
+
+def require_batch_a_marker(cycle, batch_size, ignore_stale_cycle):
+    """Batch B gate: prove the checked-out cache carries today's completed Batch A.
+
+    Accepts a phase-A marker (normal flow, cache untouched since A) or a phase-B
+    marker for the same cycle (idempotent re-run of B). Anything else fails
+    closed before a single Tiingo request is issued.
+    """
+    marker = load_marker()
+    if marker is None:
+        raise SystemExit(
+            f"{MARKER_PATH}: no Batch A completion marker found; "
+            "Batch B must not run without a matching Batch A for this update cycle"
+        )
+    phase = marker.get("phase")
+    if phase not in {"A", "B"}:
+        raise SystemExit(f"{MARKER_PATH}: unexpected marker phase {phase!r}; refusing to run Batch B")
+    if marker.get("cycle") != cycle.isoformat():
+        message = (
+            f"{MARKER_PATH}: Batch A marker is for cycle {marker.get('cycle')}, "
+            f"not the intended cycle {cycle.isoformat()}"
+        )
+        if not ignore_stale_cycle:
+            raise SystemExit(message + "; failing closed (maintenance override: --ignore-stale-cycle)")
+        print(f"WARNING: {message}; continuing via documented --ignore-stale-cycle maintenance override")
+    expected_symbols = build_batch(SYMBOLS, batch_size)[0 if phase == "A" else 1]
+    if sorted(marker.get("symbols", [])) != sorted(expected_symbols):
+        difference = sorted(set(expected_symbols) ^ set(marker.get("symbols", [])))
+        raise SystemExit(
+            f"{MARKER_PATH}: marker symbols do not match the expected {phase}-batch membership "
+            f"(first differences: {difference[:6]}...)"
+        )
+    current_sha = sha256_file(OUT)
+    if marker.get("cacheSha256") != current_sha:
+        raise SystemExit(
+            f"{MARKER_PATH}: cached data changed since the Batch A marker "
+            f"(marker sha {str(marker.get('cacheSha256'))[:12]}..., current sha {current_sha[:12]}...); "
+            "re-run Batch A for this cycle before Batch B"
+        )
+    print(
+        f"Batch A marker verified: phase={phase} cycle={marker.get('cycle')} "
+        f"symbols={len(marker.get('symbols', []))} cacheSha256={current_sha[:12]}"
+    )
+
+
+def require_phase_b_for_deploy():
+    """Deployment gate: publish only complete, finalized (phase-B) data."""
+    marker = load_marker()
+    if marker is None:
+        raise SystemExit(
+            f"{MARKER_PATH}: no update marker found; deployment requires a completed Batch B (phase B) state"
+        )
+    if marker.get("phase") != "B":
+        raise SystemExit(
+            f"{MARKER_PATH}: marker phase is {marker.get('phase')!r}; "
+            "only a completed Batch B (phase B) state may be deployed - refusing to publish a partially updated universe"
+        )
+    print(f"Deploy gate: marker phase B cycle={marker.get('cycle')} accepted")
+
+
 def build_batch(symbol_list, batch_size):
     if batch_size < 1 or batch_size > MAX_BATCH_SIZE:
         raise SystemExit(f"--batch-size must be between 1 and {MAX_BATCH_SIZE}")
@@ -431,16 +527,58 @@ def main():
     )
     parser.add_argument("--full-refresh", action="store_true", help="re-download full history for every symbol")
     parser.add_argument("--validate-only", action="store_true", help="validate the existing data file without fetching")
+    parser.add_argument(
+        "--deploy-gate",
+        action="store_true",
+        help="validate the data file and require a completed Batch B (phase B) marker",
+    )
+    parser.add_argument(
+        "--require-batch-a",
+        action="store_true",
+        help="fail closed unless a matching Batch A completion marker exists (pass alone for a gate-only check)",
+    )
+    parser.add_argument(
+        "--ignore-stale-cycle",
+        action="store_true",
+        help="documented maintenance override: accept an older-cycle Batch A marker (completeness is still enforced)",
+    )
+    parser.add_argument(
+        "--write-phase",
+        choices=["A", "B"],
+        help="after a successful run, persist an update marker for this batch phase",
+    )
+    parser.add_argument(
+        "--cycle",
+        metavar="YYYY-MM-DD",
+        type=str,
+        default=None,
+        help="update cycle date used by the Batch A marker gate (default: current UTC date)",
+    )
     args = parser.parse_args()
+
+    cycle = date.fromisoformat(args.cycle) if args.cycle else datetime.now(timezone.utc).date()
 
     cache = load_cache()
     if args.validate_only:
         validate_required(cache)
         return
+    if args.deploy_gate:
+        validate_required(cache)
+        require_phase_b_for_deploy()
+        return
+
+    batches = build_batch(SYMBOLS, args.batch_size)
+    if args.require_batch_a and not args.batch:
+        # Gate-only invocation: prove matching Batch A state without fetching.
+        require_batch_a_marker(cycle, args.batch_size, args.ignore_stale_cycle)
+        validate_required(cache)
+        return
+    if args.require_batch_a:
+        # Fail closed before issuing any Tiingo requests.
+        require_batch_a_marker(cycle, args.batch_size, args.ignore_stale_cycle)
 
     if args.batch:
         batch = args.batch.upper()
-        batches = build_batch(SYMBOLS, args.batch_size)
         index = ord(batch) - ord("A")
         if index < 0 or index >= len(batches):
             raise SystemExit(f"--batch {batch} is outside the {len(batches)} computed batches")
@@ -464,6 +602,9 @@ def main():
         time.sleep(0.25)
 
     write_payload(rows_by_symbol, provider)
+
+    if args.write_phase:
+        write_marker(args.write_phase, cycle, batch_symbols, latest_common_date(rows_by_symbol), provider.name)
 
     if args.finalize:
         validate_required(rows_by_symbol)

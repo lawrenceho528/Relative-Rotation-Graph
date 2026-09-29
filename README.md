@@ -65,24 +65,36 @@ The app includes `.nojekyll` so GitHub Pages serves the static PWA files directl
 
 ## Daily Data Update Workflow
 
-`.github/workflows/update-data.yml` runs on weekdays at `22:30 UTC`, safely after the regular U.S. market close. Tiingo Starter allows 50 requests per hour and 500 unique symbols per month, so the 95-symbol universe is updated in two separated request windows (48 + 47):
+Tiingo Starter allows 50 requests per hour, so the 95-symbol universe is updated in two **independent scheduled runs** - no runner ever sleeps between request windows:
 
-1. **Batch A** - `python scripts/update_rrg_data.py --provider tiingo --batch A --batch-size 48` downloads at most 48 real histories, writes `public/data/rrg.json`, and commits it. **Nothing is deployed after Batch A**; the intermediate commit only persists real rows so the second window can resume.
-2. The job sleeps 61 minutes to enter a new Tiingo hourly window.
-3. **Batch B** - `python scripts/update_rrg_data.py --provider tiingo --batch B --batch-size 48 --finalize` downloads the remaining symbols and runs the finalize gate: every required symbol must have real, fresh history before the run may deploy. A separate `--validate-only` step re-checks the file.
-4. Only after Batch B commits does the workflow build `dist` and deploy to GitHub Pages - exactly once per day.
+| Run | Schedule (weekdays) | Workflow | Work |
+|---|---|---|---|
+| **Batch A** | 22:30 UTC | `.github/workflows/update-data-a.yml` | `--batch A --batch-size 48 --write-phase A` - updates the first 48 symbols, writes the cache, records a completion marker, commits, exits. **Never deploys.** |
+| **Batch B** | 23:35 UTC | `.github/workflows/update-data-b.yml` | `--batch B --batch-size 48 --finalize --require-batch-a --write-phase B` - updates the remaining 47 symbols, finalizes, validates, commits, then builds and deploys GitHub Pages **once**. |
 
-A `push` to `main` also triggers `Deploy app`, which runs the same `--validate-only` gate before uploading. A half-updated file therefore can never publish: the gate fails the deploy job and the previous verified data stays live.
+**Batch A state (`public/data/update-state.json`)** records the update cycle date, phase (`A`), the exact symbols processed, the data-as-of date, the completion timestamp, and the SHA-256 of the cache it produced. Batch A's only outputs are this marker plus the merged cache commit.
 
-The updater is **real-data-only**:
+**Batch B matching gate.** Before issuing any Tiingo request, Batch B runs `--require-batch-a`, which fails closed unless the marker exists, belongs to the **same update cycle date**, lists exactly the expected Batch A membership, and its cache SHA-256 still matches the checked-out `rrg.json`. It also accepts a phase-`B` marker for the same cycle so re-running Batch B is idempotent. If today's Batch A is missing, failed, stale, or the cache diverged, Batch B stops without fetching and without deploying.
+
+**Deployment gates.** `Deploy app` (push to `main`) runs `--deploy-gate`, which requires full universe validation **and** a phase-`B` marker - a Batch-A-only intermediate commit can therefore never publish, and a half-updated universe is never visible. GitHub keeps serving the previous artifact whenever a deploy job fails.
+
+**Manual operation.** Dispatch `Update RRG data (Batch A)` or `(Batch B)` from the Actions tab on `main`; Batch B always enforces the same matching gate. For documented maintenance only, the updater accepts `--ignore-stale-cycle`, which permits Batch B against an **older-cycle** Batch A marker (for example replaying a missed day) - completeness and provenance are still fully enforced by `--finalize`, and the flag is deliberately not wired into any production workflow.
+
+**Failure / recovery matrix**
+
+- Batch A fails → Batch B fails closed at the marker gate; Pages keeps the last verified data.
+- Batch A succeeds, Batch B fails → the intermediate cache + phase-`A` marker are committed and recoverable (re-run Batch B); Pages keeps the last verified data.
+- Both succeed → exactly one deployment with the complete 95-symbol universe.
+
+**Updater details** (unchanged semantics):
 
 - New symbols are bootstrapped once from real Tiingo EOD history (up to five years, never before the fund's first real row).
 - Existing symbols download only a 21-day overlap after their newest cached row; revised adjusted closes in the overlap deterministically replace cached rows, then rows merge by date and trim to the 1,260-row history cap.
 - `--full-refresh` re-downloads full history for every symbol (for example after a large corporate action) and still respects the batch windows.
 - Short genuine ETF histories are valid; the updater and the app never fabricate prices, never extend history before a fund's inception, and never substitute legacy files. If real data is unavailable, the update fails closed and the last verified data remains deployed.
-- Batching is generic: pass `--batch C` (and so on) to extend beyond 96 symbols without redesigning the updater. Each batch stays at or below 48 requests per hourly window.
+- Batching is generic: `--batch C` (and so on) extends beyond 95 symbols without redesigning the updater; each batch stays at or below 48 requests per hourly window.
 
-GitHub Actions uses Tiingo by default because Stooq may return browser-verification HTML in cloud runners instead of CSV data. Stooq support remains in `scripts/update_rrg_data.py` for manual fallback with `--provider stooq`, but it is not used by the scheduled workflow.
+GitHub Actions uses Tiingo by default because Stooq may return browser-verification HTML in cloud runners instead of CSV data. Stooq support remains in `scripts/update_rrg_data.py` for manual fallback with `--provider stooq`, but it is not used by the scheduled workflows.
 
 To add the Tiingo key:
 

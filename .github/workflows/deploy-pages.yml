@@ -26,8 +26,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
-      - name: Validate complete real-data universe
-        run: python scripts/update_rrg_data.py --validate-only
+      - name: Validate complete real-data universe (phase B marker required)
+        run: python scripts/update_rrg_data.py --deploy-gate
       - name: Prepare static artifact
         shell: pwsh
         run: ./scripts/prepare-dist.ps1

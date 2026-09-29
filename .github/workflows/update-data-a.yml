@@ -1,0 +1,58 @@
+name: Update RRG data (Batch A)
+
+on:
+  schedule:
+    - cron: "30 22 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-data-a
+  cancel-in-progress: false
+
+jobs:
+  batch-a:
+    if: github.ref == 'refs/heads/main'
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Batch A - update first 48 symbols (no deployment)
+        env:
+          TIINGO_API_KEY: ${{ secrets.TIINGO_API_KEY }}
+        run: python scripts/update_rrg_data.py --provider tiingo --batch A --batch-size 48 --write-phase A
+      - name: Commit Batch A intermediate cache and marker
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: Update RRG data cache (batch A)
+          file_pattern: public/data/*.json
+
+  coverage-proof:
+    if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+    timeout-minutes: 100
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Prove Tiingo ETF coverage without publishing
+        env:
+          TIINGO_API_KEY: ${{ secrets.TIINGO_API_KEY }}
+        run: python scripts/tiingo-coverage-proof.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tiingo-coverage-proof
+          path: |
+            tiingo-proof.json
+            tiingo-prices.json
+          if-no-files-found: ignore
+          retention-days: 7
