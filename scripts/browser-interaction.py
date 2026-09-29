@@ -129,16 +129,24 @@ def main():
             )
             assert_true(after_slider["circles"] == 11, "Sector chart lost markers after date slider move")
             assert_true(
-                after_industries["circles"] >= 18,
-                f"Expected at least 18 industry markers, got {after_industries['circles']}",
+                after_industries["circles"] == 38,
+                f"Expected 38 industry markers, got {after_industries['circles']}",
             )
             assert_true(
-                after_industries["selectedSymbol"] == "XBI",
+                after_industries["selectedSymbol"] == "OIH",
                 f"Industry toggle did not select first industry symbol, got {after_industries['selectedSymbol']}",
             )
             assert_true(
                 after_selection["selectedSymbol"] != after_industries["selectedSymbol"],
                 "Selecting a rank row did not update the detail panel",
+            )
+            click_themes(ws)
+            after_themes = read_state(ws)
+            assert_true(
+                after_themes["activeUniverse"] == "themes"
+                and after_themes["circles"] == 42
+                and after_themes["selectedSymbol"] == "AIQ",
+                f"Themes toggle did not render the 42-symbol theme universe: {after_themes}",
             )
 
             print(
@@ -149,6 +157,7 @@ def main():
                 f"weeklyMax={after_weekly['sliderMax']} monthlyMax={after_monthly['sliderMax']}, "
                 f"playback={before_playback['sliderValue']}->{after_playback['sliderValue']}, "
                 f"industryMarkers={after_industries['circles']} tailDots={after_industries['tailDots']}, "
+                f"themeMarkers={after_themes['circles']}, "
                 f"selected={after_selection['selectedSymbol']}"
             )
         finally:
@@ -178,6 +187,7 @@ def read_state(ws):
       lengthPeriod: document.querySelector('#lengthPeriod')?.value || '',
       smoothPeriod: document.querySelector('#smoothPeriod')?.value || '',
       timeframe: document.querySelector('[data-timeframe].active')?.dataset.timeframe || '',
+      activeUniverse: document.querySelector('[data-universe].active')?.dataset.universe || '',
       benchmarkBar: document.querySelector('#benchmarkBar')?.textContent.replace(/\\s+/g, ' ').trim() || '',
       selectedDate: document.querySelector('#selectedDate')?.textContent || '',
       selectedSymbol: document.querySelector('#selectedCard strong')?.textContent || '',
@@ -336,7 +346,20 @@ def click_industries(ws):
         })()
         """,
     )
-    wait_until(ws, lambda state: state["circles"] >= 18 and state["selectedSymbol"] == "XBI")
+    wait_until(ws, lambda state: state["circles"] == 38 and state["selectedSymbol"] == "OIH")
+
+
+def click_themes(ws):
+    evaluate_json(
+        ws,
+        """
+        (() => {
+          document.querySelector('[data-universe="themes"]').click();
+          return JSON.stringify({ ok: true });
+        })()
+        """,
+    )
+    wait_until(ws, lambda state: state["activeUniverse"] == "themes" and state["circles"] == 42 and state["selectedSymbol"] == "AIQ")
 
 
 def select_third_rank_row(ws):

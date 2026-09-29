@@ -93,8 +93,8 @@ def main():
             )
             assert_true(
                 after_industries["activeUniverse"] == "industries"
-                and after_industries["circles"] >= 27
-                and after_industries["tailDots"] >= 27,
+                and after_industries["circles"] == 38
+                and after_industries["tailDots"] >= 38,
                 f"Touch tap on Industries did not switch universe: {after_industries}",
             )
             assert_true(
@@ -177,8 +177,8 @@ def touch_tap_industries(ws):
     wait_until(
         ws,
         lambda state: state["activeUniverse"] == "industries"
-        and state["circles"] >= 27
-        and state["tailDots"] >= 27,
+        and state["circles"] == 38
+        and state["tailDots"] >= 38,
     )
 
 

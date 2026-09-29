@@ -137,8 +137,12 @@ def main():
                 f"Show All did not restore every marker: {after_show_all}",
             )
             assert_true(
-                after_indices["activeUniverse"] == "indices" and after_indices["rankRows"] == 4 and after_indices["circles"] == 4,
-                f"Indices universe did not render SPX, NDX, IWM, DJI: {after_indices}",
+                after_indices["activeUniverse"] == "indices"
+                and after_indices["rankRows"] == after_indices["circles"]
+                and after_indices["circles"] >= 1
+                and after_indices["unavailableSymbols"] == "SPX,NDX,DJI",
+                "Indices universe must render only indices with real rows (IWM) and report SPX, NDX, DJI unavailable: "
+                f"{after_indices}",
             )
 
             print(
@@ -183,7 +187,7 @@ def read_state(ws):
           rankRows: document.querySelectorAll('.rank-row').length,
           hiddenRows: document.querySelectorAll('.rank-row.hidden-symbol').length,
           activeUniverse: document.querySelector('[data-universe].active')?.dataset.universe || '',
-          fallbackSymbols: document.documentElement.dataset.generatedFallbackSymbols || '',
+          unavailableSymbols: document.documentElement.dataset.unavailableSymbols || '',
           sliderValue: Number(document.querySelector('#dateSlider')?.value || 0),
           sliderMax: Number(document.querySelector('#dateSlider')?.max || 0)
         })
@@ -365,7 +369,7 @@ def switch_indices(ws):
         })()
         """,
     )
-    wait_until(ws, lambda state: state["activeUniverse"] == "indices" and state["rankRows"] == 4)
+    wait_until(ws, lambda state: state["activeUniverse"] == "indices" and state["rankRows"] == state["circles"] and state["circles"] >= 1)
 
 
 def wait_until(ws, predicate):

@@ -6,3 +6,5 @@ rgg-ipad-mini*.png
 *.log
 dist/
 deploy/
+__pycache__/
+*.pyc

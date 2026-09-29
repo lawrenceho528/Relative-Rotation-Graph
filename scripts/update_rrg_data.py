@@ -13,14 +13,22 @@ from datetime import date, datetime, timedelta, timezone
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "public" / "data" / "rrg.json"
-LEGACY_DATA = ROOT / "data" / "market-data.json"
 
 BENCHMARK = {"symbol": "SPY", "name": "S&P 500 ETF"}
 DEFAULT_LENGTH = 14
 DEFAULT_SMOOTH = 20
 HISTORY_LIMIT = 1260
 DEFAULT_HISTORY_YEARS = 5
-MIN_HISTORY_ROWS = 400
+# Incremental updates re-download this many days before the newest cached row so
+# revised adjusted closes (splits, dividends) replace the cached overlap rows.
+OVERLAP_DAYS = 21
+# Sanity floor for a real downloaded history; short genuine ETF histories are valid.
+MIN_SYMBOL_ROWS = 5
+MIN_BENCHMARK_ROWS = 252
+# Maximum allowed gap between a symbol's newest real row and the benchmark's.
+STALE_TOLERANCE_DAYS = 10
+# Tiingo Starter allows 50 requests/hour; batches stay safely below that.
+MAX_BATCH_SIZE = 48
 TIMEFRAMES = {
     "daily": {"history": 1250},
     "weekly": {"history": 260},
@@ -42,35 +50,89 @@ SECTORS = [
 ]
 
 INDUSTRIES = [
-    ("XBI", "Biotechnology", "#e05f6f", "Health Care"),
+    ("OIH", "Oil Services", "#d6ae3d", "Energy"),
+    ("XES", "Oil Equipment & Services", "#b76d2c", "Energy"),
+    ("XOP", "Oil & Gas Exploration", "#d9843d", "Energy"),
+    ("ENFR", "Energy Infrastructure", "#d984ac", "Energy"),
+    ("CRAK", "Oil Refiners", "#a67852", "Energy"),
+    ("XME", "Metals & Mining", "#b38bdb", "Materials"),
+    ("WOOD", "Timber & Forestry", "#62c370", "Materials"),
+    ("ITA", "Aerospace & Defense", "#9aa7ba", "Industrials"),
+    ("XAR", "Aerospace & Defense Equal Weight", "#ad8f42", "Industrials"),
+    ("JETS", "Airlines", "#4fb6d8", "Industrials"),
+    ("BOAT", "Global Shipping", "#37b9ba", "Industrials"),
+    ("IYT", "Transportation", "#c96ea2", "Industrials"),
+    ("ITB", "Home Construction", "#8fb35c", "Consumer Discretionary"),
+    ("PEJ", "Leisure & Entertainment", "#f38b5b", "Consumer Discretionary"),
+    ("XRT", "Retail", "#6cbf5a", "Consumer Discretionary"),
+    ("IHI", "Medical Devices", "#82b1ff", "Health Care"),
+    ("XHE", "Health Care Equipment", "#5d99d6", "Health Care"),
+    ("IHF", "Health Care Providers", "#c76792", "Health Care"),
+    ("XHS", "Health Care Services", "#8c74d6", "Health Care"),
     ("IBB", "Biotech Majors", "#b38bdb", "Health Care"),
-    ("SOXX", "Semiconductors", "#55a7ff", "Information Technology"),
-    ("XSD", "Semiconductors Equal Weight", "#3c7dd9", "Information Technology"),
+    ("XBI", "Biotechnology", "#e05f6f", "Health Care"),
+    ("PPH", "Pharmaceuticals Equal Weight", "#b64e75", "Health Care"),
+    ("XPH", "Pharmaceuticals", "#d6ae3d", "Health Care"),
+    ("KBWB", "KBW Banks", "#4e9a78", "Financials"),
+    ("KRE", "Regional Banks", "#4fb6d8", "Financials"),
+    ("IYG", "Financial Services", "#58d5d1", "Financials"),
+    ("IAI", "Broker-Dealers & Exchanges", "#7c83fd", "Financials"),
+    ("REM", "Mortgage Real Estate", "#36c07e", "Real Estate"),
+    ("IAK", "U.S. Insurance", "#62c370", "Financials"),
+    ("KIE", "Insurance", "#4fb6d8", "Financials"),
     ("IGV", "Software", "#7c83fd", "Information Technology"),
     ("XSW", "Software & Services", "#6b68d8", "Information Technology"),
     ("XTL", "Telecom", "#37b9ba", "Communication Services"),
-    ("KRE", "Regional Banks", "#4fb6d8", "Financials"),
-    ("KBE", "Banks", "#58d5d1", "Financials"),
-    ("KCE", "Capital Markets", "#4e9a78", "Financials"),
-    ("KIE", "Insurance", "#62c370", "Financials"),
-    ("PBJ", "Food & Beverage", "#6cbf5a", "Consumer Staples"),
-    ("XRT", "Retail", "#f38b5b", "Consumer Discretionary"),
-    ("XHB", "Homebuilders", "#d6ae3d", "Consumer Discretionary"),
-    ("ITB", "Residential Construction", "#8fb35c", "Consumer Discretionary"),
-    ("XME", "Metals & Mining", "#a67852", "Materials"),
-    ("XOP", "Oil & Gas Exploration", "#d9843d", "Energy"),
-    ("XES", "Oil Equipment & Services", "#b76d2c", "Energy"),
-    ("IYT", "Transportation", "#d984ac", "Industrials"),
-    ("XTN", "Transportation Equal Weight", "#c96ea2", "Industrials"),
-    ("ITA", "Aerospace & Defense", "#9aa7ba", "Industrials"),
-    ("IYR", "Real Estate", "#36c07e", "Real Estate"),
-    ("IDU", "Utilities", "#58d5d1", "Utilities"),
-    ("XPH", "Pharmaceuticals", "#b64e75", "Health Care"),
-    ("IHF", "Health Care Providers", "#c76792", "Health Care"),
-    ("IHI", "Medical Devices", "#82b1ff", "Health Care"),
-    ("XHE", "Health Care Equipment", "#5d99d6", "Health Care"),
-    ("XHS", "Health Care Services", "#8c74d6", "Health Care"),
-    ("XAR", "Aerospace & Defense Equal Weight", "#ad8f42", "Industrials"),
+    ("SMH", "Semiconductors", "#55a7ff", "Information Technology"),
+    ("XSD", "Semiconductors Equal Weight", "#3c7dd9", "Information Technology"),
+    ("INDS", "Industrial Real Estate", "#9aa7ba", "Real Estate"),
+    ("DESK", "Office & Commercial REITs", "#ad8f42", "Real Estate"),
+    ("HAUS", "Residential REITs", "#c96ea2", "Real Estate"),
+]
+
+THEMES = [
+    ("AIQ", "AI & Technology", "#7c83fd", "Artificial Intelligence"),
+    ("CHAT", "Generative AI", "#e05f6f", "Artificial Intelligence"),
+    ("AIS", "AI Supercycle", "#55a7ff", "Artificial Intelligence"),
+    ("AIPO", "AI & Power", "#d6ae3d", "Artificial Intelligence"),
+    ("BOTZ", "Robotics & AI", "#8fb35c", "Artificial Intelligence"),
+    ("DRAM", "Memory Chips", "#b38bdb", "Semiconductors"),
+    ("EUV", "Lithography & Photonics", "#58d5d1", "Semiconductors"),
+    ("SKYY", "Cloud Computing", "#4fb6d8", "Cloud & Software"),
+    ("WCLD", "Cloud Equal Weight", "#6b68d8", "Cloud & Software"),
+    ("CIBR", "Cybersecurity", "#f38b5b", "Cybersecurity & Quantum"),
+    ("QTUM", "Quantum Computing", "#37b9ba", "Cybersecurity & Quantum"),
+    ("DTCR", "Data Centers", "#3c7dd9", "Digital Infrastructure"),
+    ("IDGT", "Digital Infrastructure", "#82b1ff", "Digital Infrastructure"),
+    ("WGMI", "Bitcoin Miners", "#d6ae3d", "Digital Infrastructure"),
+    ("FINX", "FinTech", "#62c370", "FinTech & Blockchain"),
+    ("BLOK", "Blockchain", "#4e9a78", "FinTech & Blockchain"),
+    ("UFO", "Space", "#9aa7ba", "Space & Defense"),
+    ("SHLD", "Defense Tech", "#ad8f42", "Space & Defense"),
+    ("DRNZ", "Drones", "#c96ea2", "Mobility"),
+    ("DRIV", "Autonomous & EV", "#d9843d", "Mobility"),
+    ("TAN", "Solar", "#f38b5b", "Clean Energy"),
+    ("FAN", "Wind Energy", "#58d5d1", "Clean Energy"),
+    ("ICLN", "Clean Energy", "#62c370", "Clean Energy"),
+    ("PBW", "WilderHill Clean Energy", "#6cbf5a", "Clean Energy"),
+    ("NUKZ", "Nuclear", "#b38bdb", "Clean Energy"),
+    ("URA", "Uranium", "#d9843d", "Clean Energy"),
+    ("HYDR", "Hydrogen", "#36c07e", "Clean Energy"),
+    ("LNGX", "U.S. Natural Gas", "#b76d2c", "Natural Gas"),
+    ("GRID", "Smart Grid", "#7c83fd", "Grid & Utilities"),
+    ("PAVE", "U.S. Infrastructure", "#8fb35c", "Infrastructure"),
+    ("AIRR", "Industrial Renaissance", "#c76792", "Infrastructure"),
+    ("LIT", "Lithium", "#55a7ff", "Batteries & Materials"),
+    ("BATT", "Lithium & Battery", "#5d99d6", "Batteries & Materials"),
+    ("COPX", "Copper Miners", "#a67852", "Mining & Materials"),
+    ("REMX", "Rare Earth & Metals", "#d984ac", "Mining & Materials"),
+    ("GDX", "Gold Miners", "#d6ae3d", "Precious Metals"),
+    ("GDXJ", "Junior Gold Miners", "#ad8f42", "Precious Metals"),
+    ("SIL", "Silver Miners", "#58d5d1", "Precious Metals"),
+    ("SILJ", "Junior Silver Miners", "#8c74d6", "Precious Metals"),
+    ("MOO", "Agribusiness", "#6cbf5a", "Agriculture & Water"),
+    ("PHO", "Water Resources", "#4fb6d8", "Agriculture & Water"),
+    ("ARKG", "Genomic Revolution", "#e05f6f", "Biotechnology"),
 ]
 
 INDICES = [
@@ -80,12 +142,19 @@ INDICES = [
     ("DJI", "Dow Jones Industrial Average", "#d6ae3d", "Market Index"),
 ]
 
-SYMBOLS = [
-    BENCHMARK["symbol"],
-    *[row[0] for row in SECTORS],
-    *[row[0] for row in INDUSTRIES],
-    *[row[0] for row in INDICES],
-]
+# Deterministic, order-preserving deduplication: a shared ticker downloads once.
+SYMBOLS = list(
+    dict.fromkeys(
+        [
+            BENCHMARK["symbol"],
+            *[row[0] for row in SECTORS],
+            *[row[0] for row in INDUSTRIES],
+            *[row[0] for row in THEMES],
+            *[row[0] for row in INDICES],
+        ]
+    )
+)
+REQUIRED_SYMBOLS = frozenset(SYMBOLS)
 TIINGO_SECRET_HELP = (
     "TIINGO_API_KEY is missing. Add it in GitHub at "
     "Settings -> Secrets and variables -> Actions -> New repository secret, "
@@ -94,10 +163,12 @@ TIINGO_SECRET_HELP = (
 
 
 class StooqProvider:
+    """Manual-only real-data fallback provider; never used by scheduled production runs."""
+
     name = "Stooq daily CSV"
     price_field = "close"
 
-    def fetch(self, symbol):
+    def fetch(self, symbol, start_date, end_date):
         ticker = urllib.parse.quote(f"{symbol.lower()}.us")
         url = f"https://stooq.com/q/d/l/?s={ticker}&i=d"
         request = urllib.request.Request(url, headers={"User-Agent": "RGG-Rotation/1.0"})
@@ -125,14 +196,12 @@ class StooqProvider:
             if not date_value or not close_value:
                 continue
             try:
-                datetime.fromisoformat(date_value)
+                parsed = datetime.fromisoformat(date_value).date()
                 close = float(close_value)
             except ValueError:
                 continue
-            if close > 0:
+            if close > 0 and start_date <= parsed <= end_date:
                 rows.append({"date": date_value, "close": round(close, 4)})
-        if len(rows) < 180:
-            raise RuntimeError(f"{symbol}: not enough Stooq rows")
         return rows
 
 
@@ -143,11 +212,9 @@ class TiingoProvider:
     def __init__(self):
         self.api_key = os.getenv("TIINGO_API_KEY")
 
-    def fetch(self, symbol):
+    def fetch(self, symbol, start_date, end_date):
         if not self.api_key:
             raise RuntimeError(TIINGO_SECRET_HELP)
-        end_date = date.today()
-        start_date = end_date - timedelta(days=DEFAULT_HISTORY_YEARS * 366)
         params = urllib.parse.urlencode(
             {
                 "startDate": start_date.isoformat(),
@@ -156,7 +223,7 @@ class TiingoProvider:
             }
         )
         url = f"https://api.tiingo.com/tiingo/daily/{urllib.parse.quote(symbol)}/prices?{params}"
-        print(f"Tiingo request {symbol}: url={url}")
+        print(f"Tiingo request {symbol}: {start_date.isoformat()}..{end_date.isoformat()}")
         request = urllib.request.Request(url, headers={"Authorization": f"Token {self.api_key}"})
         try:
             with urllib.request.urlopen(request, timeout=30) as response:
@@ -165,19 +232,19 @@ class TiingoProvider:
         except urllib.error.HTTPError as exc:
             status = exc.code
             text = exc.read().decode("utf-8", errors="replace")
-            print(f"Tiingo response {symbol}: httpStatus={status} rowsRaw=0 rowsFiltered=0 firstDate= lastDate=")
+            print(f"Tiingo response {symbol}: httpStatus={status} rowsRaw=0 rowsKept=0 firstDate= lastDate=")
             print(f"Tiingo error {symbol}: {summarize_json_or_text(text)}")
             raise RuntimeError(f"{symbol}: Tiingo HTTP {status}") from exc
 
         try:
             payload = json.loads(text)
         except json.JSONDecodeError as exc:
-            print(f"Tiingo response {symbol}: httpStatus={status} rowsRaw=0 rowsFiltered=0 firstDate= lastDate=")
+            print(f"Tiingo response {symbol}: httpStatus={status} rowsRaw=0 rowsKept=0 firstDate= lastDate=")
             print(f"Tiingo error {symbol}: response was not JSON: {summarize_text(text)}")
             raise RuntimeError(f"{symbol}: Tiingo returned non-JSON response") from exc
 
         if not isinstance(payload, list):
-            print(f"Tiingo response {symbol}: httpStatus={status} rowsRaw=0 rowsFiltered=0 firstDate= lastDate=")
+            print(f"Tiingo response {symbol}: httpStatus={status} rowsRaw=0 rowsKept=0 firstDate= lastDate=")
             print(f"Tiingo error {symbol}: expected a JSON list, got {type(payload).__name__}: {summarize_payload(payload)}")
             raise RuntimeError(f"{symbol}: Tiingo returned error response")
 
@@ -202,13 +269,8 @@ class TiingoProvider:
         last_date = rows[-1]["date"] if rows else ""
         print(
             f"Tiingo response {symbol}: httpStatus={status} rowsRaw={len(payload)} "
-            f"rowsFiltered={len(rows)} firstDate={first_date} lastDate={last_date}"
+            f"rowsKept={len(rows)} firstDate={first_date} lastDate={last_date}"
         )
-        if len(rows) < MIN_HISTORY_ROWS:
-            raise RuntimeError(
-                f"{symbol}: not enough Tiingo rows after filtering "
-                f"({len(rows)} < {MIN_HISTORY_ROWS}); firstDate={first_date or 'n/a'} lastDate={last_date or 'n/a'}"
-            )
         return rows
 
 
@@ -248,128 +310,27 @@ def summarize_text(text, limit=300):
     return compact[:limit] + ("..." if len(compact) > limit else "")
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Update generated RRG data for the static dashboard.")
-    parser.add_argument("--provider", choices=["stooq", "tiingo"], default="tiingo")
-    parser.add_argument("--existing-only", action="store_true", help="Use existing local market-data.json for offline testing.")
-    parser.add_argument("--use-existing-on-fail", action="store_true")
-    args = parser.parse_args()
-
-    provider = TiingoProvider() if args.provider == "tiingo" else StooqProvider()
-    if args.provider == "tiingo" and not provider.api_key and not args.existing_only and not args.use_existing_on_fail:
-        raise SystemExit(TIINGO_SECRET_HELP)
-    warnings = []
-    if args.existing_only:
-        rows_by_symbol = load_existing_rows()
-        source = "Existing local market-data.json"
-        price_field = "close"
-    else:
-        try:
-            rows_by_symbol, warnings = fetch_all(provider)
-            source = provider.name
-            price_field = provider.price_field
-        except Exception:
-            if not args.use_existing_on_fail:
-                raise
-            rows_by_symbol = load_existing_rows()
-            source = "Existing local market-data.json"
-            price_field = "close"
-            warnings = [f"{provider.name} failed; used existing local data fallback"]
-
-    fill_missing_symbols(rows_by_symbol, warnings)
-    rows_by_symbol = {symbol: rows[-HISTORY_LIMIT:] for symbol, rows in rows_by_symbol.items()}
-    generated_at = date.today().isoformat()
-    data_as_of = latest_common_date(rows_by_symbol) or generated_at
-    timeline_dates = [row["date"] for row in rows_by_symbol[BENCHMARK["symbol"]][-TIMEFRAMES["daily"]["history"] :]]
-    payload = {
-        "schemaVersion": 1,
-        "generatedAt": generated_at,
-        "generatedAtUtc": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-        "dataAsOf": data_as_of,
-        "source": source,
-        "priceField": price_field,
-        "benchmark": BENCHMARK,
-        "defaultPeriods": {"length": DEFAULT_LENGTH, "smooth": DEFAULT_SMOOTH},
-        "timeframes": TIMEFRAMES,
-        "warnings": warnings,
-        "symbols": rows_by_symbol,
-        "rrg": build_precomputed_rrg(rows_by_symbol),
-    }
-
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
-    print(f"RRG data source: {source}")
-    print(f"RRG dataAsOf: {data_as_of}")
-    print(f"RRG first timeline date: {timeline_dates[0] if timeline_dates else ''}")
-    print(f"RRG last timeline date: {timeline_dates[-1] if timeline_dates else ''}")
-    print(f"RRG timeline dates: {len(timeline_dates)}")
-    print(f"RRG output file: {OUT}")
-    print("RRG deployed path: data/rrg.json")
-    print(f"Wrote {OUT} symbols={len(rows_by_symbol)} warnings={len(warnings)} generatedAt={generated_at} source={source}")
+def parse_date(value):
+    return date.fromisoformat(value)
 
 
-def fetch_all(provider):
-    rows_by_symbol = {}
-    warnings = []
-    for index, symbol in enumerate(SYMBOLS, start=1):
-        try:
-            rows = provider.fetch(symbol)
-        except Exception as exc:
-            if symbol == BENCHMARK["symbol"]:
-                raise RuntimeError(f"{symbol}: benchmark fetch failed; cannot calculate RRG without SPY. {exc}") from exc
-            warning = f"{symbol}: skipped, {exc}"
-            warnings.append(warning)
-            print(f"WARNING: {warning}")
-            time.sleep(0.25)
-            continue
-
-        rows_by_symbol[symbol] = rows
-        if symbol == BENCHMARK["symbol"]:
-            print(
-                f"Benchmark {BENCHMARK['symbol']} confirmed: rows={len(rows)} "
-                f"firstDate={rows[0]['date']} lastDate={rows[-1]['date']}"
-            )
-        print(f"{index:02d}/{len(SYMBOLS)} {symbol} rows={len(rows_by_symbol[symbol])}")
-        time.sleep(0.25)
-    return rows_by_symbol, warnings
-
-
-def load_existing_rows():
-    if not LEGACY_DATA.exists():
-        raise FileNotFoundError(f"Missing {LEGACY_DATA}")
-    payload = json.loads(LEGACY_DATA.read_text(encoding="utf-8"))
-    source_symbols = payload.get("symbols", {})
-    rows_by_symbol = {}
-    for symbol in SYMBOLS:
-        rows = source_symbols.get(symbol)
-        if rows:
-            rows_by_symbol[symbol] = normalize_existing_price_rows(rows)
-            continue
-        if symbol == BENCHMARK["symbol"]:
-            raise KeyError(f"{symbol}: missing benchmark rows in {LEGACY_DATA}")
-        print(f"WARNING: {symbol}: missing from existing local data; generating offline sample rows")
-
-    benchmark_rows = rows_by_symbol.get(BENCHMARK["symbol"])
-    if not benchmark_rows:
-        raise RuntimeError(f"{BENCHMARK['symbol']}: missing benchmark rows in {LEGACY_DATA}")
-
-    for symbol in SYMBOLS:
-        if symbol not in rows_by_symbol and symbol != BENCHMARK["symbol"]:
-            rows_by_symbol[symbol] = generate_sample_rows(symbol, benchmark_rows)
-    return rows_by_symbol
-
-
-def fill_missing_symbols(rows_by_symbol, warnings):
-    benchmark_rows = rows_by_symbol.get(BENCHMARK["symbol"])
-    if not benchmark_rows:
-        return
-    for symbol in SYMBOLS:
-        if symbol == BENCHMARK["symbol"] or symbol in rows_by_symbol:
-            continue
-        warning = f"{symbol}: generated offline sample rows because provider data was unavailable"
-        warnings.append(warning)
-        print(f"WARNING: {warning}")
-        rows_by_symbol[symbol] = generate_sample_rows(symbol, benchmark_rows)
+def load_cache():
+    """Load previously downloaded real rows. Synthetic/legacy substitutes are never accepted."""
+    if not OUT.exists():
+        return {}
+    payload = json.loads(OUT.read_text(encoding="utf-8"))
+    source = payload.get("source", "")
+    if "sample" in source.lower() or "synthetic" in source.lower() or "existing local" in source.lower():
+        raise SystemExit(
+            f"{OUT}: cached data source '{source}' is not real provider data; "
+            "refusing to build on fabricated rows"
+        )
+    cache = {}
+    for symbol, rows in payload.get("symbols", {}).items():
+        normalized = normalize_existing_price_rows(rows)
+        if normalized:
+            cache[symbol] = normalized
+    return cache
 
 
 def normalize_existing_price_rows(rows):
@@ -377,39 +338,171 @@ def normalize_existing_price_rows(rows):
     for row in rows:
         try:
             close = float(row.get("close"))
+            parse_date(row.get("date", ""))
         except (TypeError, ValueError):
             continue
-        if row.get("date") and close > 0:
+        if close > 0:
             normalized.append({"date": row["date"], "close": round(close, 4)})
     return normalized
 
 
-def generate_sample_rows(symbol, benchmark_rows):
-    seed = hash_symbol(symbol)
-    price = 70 + (seed % 90)
-    phase = (seed % 360) * (math.pi / 180)
-    drift = 0.00014 + ((seed % 11) - 5) * 0.000015
-    beta = 0.78 + (seed % 50) / 100
-    rows = []
-    for index, benchmark_row in enumerate(benchmark_rows):
-        if index:
-            previous = benchmark_rows[index - 1]["close"]
-            current = benchmark_row["close"]
-            market_return = current / previous - 1 if previous else 0
-        else:
-            market_return = 0
-        cycle = math.sin(index / (34 + (seed % 28)) + phase) * 0.006
-        noise = math.sin(index * (0.67 + (seed % 9) / 30) + phase * 2) * 0.004
-        price *= 1 + market_return * beta + drift + cycle + noise
-        rows.append({"date": benchmark_row["date"], "close": round(price, 4)})
-    return rows
+def merge_history(cached_rows, fetched_rows):
+    """Deterministic date merge: fetched rows win inside their downloaded range."""
+    merged = {row["date"]: row["close"] for row in cached_rows}
+    for row in fetched_rows:
+        merged[row["date"]] = row["close"]
+    return [{"date": day, "close": merged[day]} for day in sorted(merged)]
 
 
-def hash_symbol(symbol):
-    value = 17
-    for char in symbol:
-        value = value * 31 + ord(char)
-    return value
+def update_symbol(symbol, cached_rows, provider, full_refresh):
+    today = date.today()
+    if cached_rows and not full_refresh:
+        newest = parse_date(cached_rows[-1]["date"])
+        start_date = newest - timedelta(days=OVERLAP_DAYS)
+        mode = f"incremental overlap from {start_date.isoformat()}"
+    else:
+        start_date = today - timedelta(days=DEFAULT_HISTORY_YEARS * 366)
+        mode = f"bootstrap from {start_date.isoformat()}"
+    print(f"{symbol}: {mode}")
+    fetched = provider.fetch(symbol, start_date, today)
+    rows = merge_history(cached_rows, fetched)
+    if symbol == BENCHMARK["symbol"] and len(rows) < MIN_BENCHMARK_ROWS:
+        raise RuntimeError(f"{BENCHMARK['symbol']}: benchmark needs {MIN_BENCHMARK_ROWS} real rows, got {len(rows)}")
+    if len(rows) < MIN_SYMBOL_ROWS:
+        raise RuntimeError(
+            f"{symbol}: only {len(rows)} real rows returned; refusing to publish without usable real history"
+        )
+    return rows[-HISTORY_LIMIT:]
+
+
+def build_batch(symbol_list, batch_size):
+    if batch_size < 1 or batch_size > MAX_BATCH_SIZE:
+        raise SystemExit(f"--batch-size must be between 1 and {MAX_BATCH_SIZE}")
+    return [symbol_list[index : index + batch_size] for index in range(0, len(symbol_list), batch_size)]
+
+
+def validate_required(rows_by_symbol):
+    """Deployment gate: every required symbol must exist with real, fresh history."""
+    problems = []
+    benchmark_rows = rows_by_symbol.get(BENCHMARK["symbol"])
+    if not benchmark_rows:
+        problems.append(f"{BENCHMARK['symbol']}: benchmark history missing")
+        benchmark_latest = None
+    else:
+        if len(benchmark_rows) < MIN_BENCHMARK_ROWS:
+            problems.append(f"{BENCHMARK['symbol']}: {len(benchmark_rows)} rows is below {MIN_BENCHMARK_ROWS}")
+        benchmark_latest = parse_date(benchmark_rows[-1]["date"])
+
+    for symbol in sorted(REQUIRED_SYMBOLS):
+        rows = rows_by_symbol.get(symbol)
+        if not rows:
+            problems.append(f"{symbol}: no real history available")
+            continue
+        if len(rows) < MIN_SYMBOL_ROWS:
+            problems.append(f"{symbol}: {len(rows)} rows is below the {MIN_SYMBOL_ROWS}-row minimum")
+        if benchmark_latest:
+            latest = parse_date(rows[-1]["date"])
+            gap = abs((benchmark_latest - latest).days)
+            if gap > STALE_TOLERANCE_DAYS:
+                problems.append(f"{symbol}: newest row {latest} is {gap} days from benchmark {benchmark_latest}")
+
+    if problems:
+        raise SystemExit(
+            "RRG data validation failed; deployment must not proceed.\n  - " + "\n  - ".join(problems)
+        )
+    print(
+        f"RRG data validation passed: symbols={len(rows_by_symbol)} "
+        f"required={len(REQUIRED_SYMBOLS)} benchmarkLatest={benchmark_latest}"
+    )
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Update generated RRG data for the static dashboard.")
+    parser.add_argument("--provider", choices=["stooq", "tiingo"], default="tiingo")
+    parser.add_argument(
+        "--batch",
+        metavar="A|B|...",
+        help="process only this hourly request window (chunks of --batch-size symbols)",
+    )
+    parser.add_argument("--batch-size", type=int, default=MAX_BATCH_SIZE)
+    parser.add_argument(
+        "--finalize",
+        action="store_true",
+        help="enforce the complete-universe deployment gate after writing",
+    )
+    parser.add_argument("--full-refresh", action="store_true", help="re-download full history for every symbol")
+    parser.add_argument("--validate-only", action="store_true", help="validate the existing data file without fetching")
+    args = parser.parse_args()
+
+    cache = load_cache()
+    if args.validate_only:
+        validate_required(cache)
+        return
+
+    if args.batch:
+        batch = args.batch.upper()
+        batches = build_batch(SYMBOLS, args.batch_size)
+        index = ord(batch) - ord("A")
+        if index < 0 or index >= len(batches):
+            raise SystemExit(f"--batch {batch} is outside the {len(batches)} computed batches")
+        batch_symbols = batches[index]
+    else:
+        if args.provider == "tiingo" and len(SYMBOLS) > MAX_BATCH_SIZE:
+            raise SystemExit(
+                f"{len(SYMBOLS)} symbols exceed the {MAX_BATCH_SIZE}-request hourly window; "
+                "pass --batch A / --batch B"
+            )
+        batch_symbols = SYMBOLS
+
+    provider = TiingoProvider() if args.provider == "tiingo" else StooqProvider()
+    if args.provider == "tiingo" and not provider.api_key:
+        raise SystemExit(TIINGO_SECRET_HELP)
+
+    rows_by_symbol = {symbol: list(rows) for symbol, rows in cache.items()}
+    for index, symbol in enumerate(batch_symbols, start=1):
+        rows_by_symbol[symbol] = update_symbol(symbol, rows_by_symbol.get(symbol, []), provider, args.full_refresh)
+        print(f"{index:02d}/{len(batch_symbols)} {symbol} rows={len(rows_by_symbol[symbol])}")
+        time.sleep(0.25)
+
+    write_payload(rows_by_symbol, provider)
+
+    if args.finalize:
+        validate_required(rows_by_symbol)
+    else:
+        missing = sorted(REQUIRED_SYMBOLS - set(rows_by_symbol))
+        if missing:
+            print(f"Intermediate batch state: missing real history for {', '.join(missing)}")
+
+
+def write_payload(rows_by_symbol, provider):
+    trimmed = {symbol: rows[-HISTORY_LIMIT:] for symbol, rows in rows_by_symbol.items() if rows}
+    generated_at = date.today().isoformat()
+    data_as_of = latest_common_date(trimmed) or generated_at
+    payload = {
+        "schemaVersion": 1,
+        "generatedAt": generated_at,
+        "generatedAtUtc": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "dataAsOf": data_as_of,
+        "source": provider.name,
+        "priceField": provider.price_field,
+        "benchmark": BENCHMARK,
+        "defaultPeriods": {"length": DEFAULT_LENGTH, "smooth": DEFAULT_SMOOTH},
+        "timeframes": TIMEFRAMES,
+        "warnings": [],
+        "symbols": trimmed,
+        "rrg": build_precomputed_rrg(trimmed),
+    }
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    OUT.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+    benchmark_rows = trimmed.get(BENCHMARK["symbol"], [])
+    print(f"RRG data source: {provider.name}")
+    print(f"RRG dataAsOf: {data_as_of}")
+    print(f"RRG output file: {OUT}")
+    print(f"RRG deployed path: data/rrg.json")
+    print(
+        f"Wrote {OUT} symbols={len(trimmed)} generatedAt={generated_at} "
+        f"source={provider.name} benchmarkLatest={benchmark_rows[-1]['date'] if benchmark_rows else 'n/a'}"
+    )
 
 
 def latest_common_date(rows_by_symbol):
@@ -453,10 +546,11 @@ def week_key(day):
 
 
 def align_to_dates(history, dates):
+    """Align a real history to benchmark dates; dates before the first row stay None (no back-fill)."""
     by_date = {row["date"]: row["close"] for row in history}
     sorted_rows = sorted(history, key=lambda row: row["date"])
     pointer = 0
-    last_close = sorted_rows[0]["close"] if sorted_rows else 1
+    last_close = None
     aligned = []
     for day in dates:
         if day in by_date:
@@ -466,7 +560,7 @@ def align_to_dates(history, dates):
         while pointer < len(sorted_rows) and sorted_rows[pointer]["date"] <= day:
             last_close = sorted_rows[pointer]["close"]
             pointer += 1
-        aligned.append(last_close)
+        aligned.append(last_close if sorted_rows and sorted_rows[0]["date"] <= day else None)
     return aligned
 
 

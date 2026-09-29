@@ -19,6 +19,9 @@ const TIMEFRAMES = {
   }
 };
 const RRG_PERIODS = [10, 14, 20, 50, 100, 150, 200];
+// Real-data policy: symbols without genuine rows stay unavailable; never synthesize prices.
+const MIN_BENCHMARK_ROWS = 252;
+const MIN_UNIVERSE_ROWS = 5;
 const DEFAULT_LENGTH_PERIOD = 14;
 const DEFAULT_SMOOTH_PERIOD = 20;
 const CHART_CENTER = 100;
@@ -40,35 +43,88 @@ const UNIVERSES = {
     ["XLU", "Utilities", "#58d5d1", "GICS Sector"]
   ].map(toAsset),
   industries: [
-    ["XBI", "Biotechnology", "#e05f6f", "Health Care"],
+    ["OIH", "Oil Services", "#d6ae3d", "Energy"],
+    ["XES", "Oil Equipment & Services", "#b76d2c", "Energy"],
+    ["XOP", "Oil & Gas Exploration", "#d9843d", "Energy"],
+    ["ENFR", "Energy Infrastructure", "#d984ac", "Energy"],
+    ["CRAK", "Oil Refiners", "#a67852", "Energy"],
+    ["XME", "Metals & Mining", "#b38bdb", "Materials"],
+    ["WOOD", "Timber & Forestry", "#62c370", "Materials"],
+    ["ITA", "Aerospace & Defense", "#9aa7ba", "Industrials"],
+    ["XAR", "Aerospace & Defense Equal Weight", "#ad8f42", "Industrials"],
+    ["JETS", "Airlines", "#4fb6d8", "Industrials"],
+    ["BOAT", "Global Shipping", "#37b9ba", "Industrials"],
+    ["IYT", "Transportation", "#c96ea2", "Industrials"],
+    ["ITB", "Home Construction", "#8fb35c", "Consumer Discretionary"],
+    ["PEJ", "Leisure & Entertainment", "#f38b5b", "Consumer Discretionary"],
+    ["XRT", "Retail", "#6cbf5a", "Consumer Discretionary"],
+    ["IHI", "Medical Devices", "#82b1ff", "Health Care"],
+    ["XHE", "Health Care Equipment", "#5d99d6", "Health Care"],
+    ["IHF", "Health Care Providers", "#c76792", "Health Care"],
+    ["XHS", "Health Care Services", "#8c74d6", "Health Care"],
     ["IBB", "Biotech Majors", "#b38bdb", "Health Care"],
-    ["SOXX", "Semiconductors", "#55a7ff", "Information Technology"],
-    ["XSD", "Semiconductors Equal Weight", "#3c7dd9", "Information Technology"],
+    ["XBI", "Biotechnology", "#e05f6f", "Health Care"],
+    ["PPH", "Pharmaceuticals Equal Weight", "#b64e75", "Health Care"],
+    ["XPH", "Pharmaceuticals", "#d6ae3d", "Health Care"],
+    ["KBWB", "KBW Banks", "#4e9a78", "Financials"],
+    ["KRE", "Regional Banks", "#4fb6d8", "Financials"],
+    ["IYG", "Financial Services", "#58d5d1", "Financials"],
+    ["IAI", "Broker-Dealers & Exchanges", "#7c83fd", "Financials"],
+    ["REM", "Mortgage Real Estate", "#36c07e", "Real Estate"],
+    ["IAK", "U.S. Insurance", "#62c370", "Financials"],
+    ["KIE", "Insurance", "#4fb6d8", "Financials"],
     ["IGV", "Software", "#7c83fd", "Information Technology"],
     ["XSW", "Software & Services", "#6b68d8", "Information Technology"],
     ["XTL", "Telecom", "#37b9ba", "Communication Services"],
-    ["KRE", "Regional Banks", "#4fb6d8", "Financials"],
-    ["KBE", "Banks", "#58d5d1", "Financials"],
-    ["KCE", "Capital Markets", "#4e9a78", "Financials"],
-    ["KIE", "Insurance", "#62c370", "Financials"],
-    ["PBJ", "Food & Beverage", "#6cbf5a", "Consumer Staples"],
-    ["XRT", "Retail", "#f38b5b", "Consumer Discretionary"],
-    ["XHB", "Homebuilders", "#d6ae3d", "Consumer Discretionary"],
-    ["ITB", "Residential Construction", "#8fb35c", "Consumer Discretionary"],
-    ["XME", "Metals & Mining", "#a67852", "Materials"],
-    ["XOP", "Oil & Gas Exploration", "#d9843d", "Energy"],
-    ["XES", "Oil Equipment & Services", "#b76d2c", "Energy"],
-    ["IYT", "Transportation", "#d984ac", "Industrials"],
-    ["XTN", "Transportation Equal Weight", "#c96ea2", "Industrials"],
-    ["ITA", "Aerospace & Defense", "#9aa7ba", "Industrials"],
-    ["IYR", "Real Estate", "#36c07e", "Real Estate"],
-    ["IDU", "Utilities", "#58d5d1", "Utilities"],
-    ["XPH", "Pharmaceuticals", "#b64e75", "Health Care"],
-    ["IHF", "Health Care Providers", "#c76792", "Health Care"],
-    ["IHI", "Medical Devices", "#82b1ff", "Health Care"],
-    ["XHE", "Health Care Equipment", "#5d99d6", "Health Care"],
-    ["XHS", "Health Care Services", "#8c74d6", "Health Care"],
-    ["XAR", "Aerospace & Defense Equal Weight", "#ad8f42", "Industrials"]
+    ["SMH", "Semiconductors", "#55a7ff", "Information Technology"],
+    ["XSD", "Semiconductors Equal Weight", "#3c7dd9", "Information Technology"],
+    ["INDS", "Industrial Real Estate", "#9aa7ba", "Real Estate"],
+    ["DESK", "Office & Commercial REITs", "#ad8f42", "Real Estate"],
+    ["HAUS", "Residential REITs", "#c96ea2", "Real Estate"]
+  ].map(toAsset),
+  themes: [
+    ["AIQ", "AI & Technology", "#7c83fd", "Artificial Intelligence"],
+    ["CHAT", "Generative AI", "#e05f6f", "Artificial Intelligence"],
+    ["AIS", "AI Supercycle", "#55a7ff", "Artificial Intelligence"],
+    ["AIPO", "AI & Power", "#d6ae3d", "Artificial Intelligence"],
+    ["BOTZ", "Robotics & AI", "#8fb35c", "Artificial Intelligence"],
+    ["DRAM", "Memory Chips", "#b38bdb", "Semiconductors"],
+    ["EUV", "Lithography & Photonics", "#58d5d1", "Semiconductors"],
+    ["SKYY", "Cloud Computing", "#4fb6d8", "Cloud & Software"],
+    ["WCLD", "Cloud Equal Weight", "#6b68d8", "Cloud & Software"],
+    ["CIBR", "Cybersecurity", "#f38b5b", "Cybersecurity & Quantum"],
+    ["QTUM", "Quantum Computing", "#37b9ba", "Cybersecurity & Quantum"],
+    ["DTCR", "Data Centers", "#3c7dd9", "Digital Infrastructure"],
+    ["IDGT", "Digital Infrastructure", "#82b1ff", "Digital Infrastructure"],
+    ["WGMI", "Bitcoin Miners", "#d6ae3d", "Digital Infrastructure"],
+    ["FINX", "FinTech", "#62c370", "FinTech & Blockchain"],
+    ["BLOK", "Blockchain", "#4e9a78", "FinTech & Blockchain"],
+    ["UFO", "Space", "#9aa7ba", "Space & Defense"],
+    ["SHLD", "Defense Tech", "#ad8f42", "Space & Defense"],
+    ["DRNZ", "Drones", "#c96ea2", "Mobility"],
+    ["DRIV", "Autonomous & EV", "#d9843d", "Mobility"],
+    ["TAN", "Solar", "#f38b5b", "Clean Energy"],
+    ["FAN", "Wind Energy", "#58d5d1", "Clean Energy"],
+    ["ICLN", "Clean Energy", "#62c370", "Clean Energy"],
+    ["PBW", "WilderHill Clean Energy", "#6cbf5a", "Clean Energy"],
+    ["NUKZ", "Nuclear", "#b38bdb", "Clean Energy"],
+    ["URA", "Uranium", "#d9843d", "Clean Energy"],
+    ["HYDR", "Hydrogen", "#36c07e", "Clean Energy"],
+    ["LNGX", "U.S. Natural Gas", "#b76d2c", "Natural Gas"],
+    ["GRID", "Smart Grid", "#7c83fd", "Grid & Utilities"],
+    ["PAVE", "U.S. Infrastructure", "#8fb35c", "Infrastructure"],
+    ["AIRR", "Industrial Renaissance", "#c76792", "Infrastructure"],
+    ["LIT", "Lithium", "#55a7ff", "Batteries & Materials"],
+    ["BATT", "Lithium & Battery", "#5d99d6", "Batteries & Materials"],
+    ["COPX", "Copper Miners", "#a67852", "Mining & Materials"],
+    ["REMX", "Rare Earth & Metals", "#d984ac", "Mining & Materials"],
+    ["GDX", "Gold Miners", "#d6ae3d", "Precious Metals"],
+    ["GDXJ", "Junior Gold Miners", "#ad8f42", "Precious Metals"],
+    ["SIL", "Silver Miners", "#58d5d1", "Precious Metals"],
+    ["SILJ", "Junior Silver Miners", "#8c74d6", "Precious Metals"],
+    ["MOO", "Agribusiness", "#6cbf5a", "Agriculture & Water"],
+    ["PHO", "Water Resources", "#4fb6d8", "Agriculture & Water"],
+    ["ARKG", "Genomic Revolution", "#e05f6f", "Biotechnology"]
   ].map(toAsset),
   indices: [
     ["SPX", "S&P 500 Index", "#55a7ff", "Market Index"],
@@ -365,23 +421,31 @@ async function loadUniverse(forceRefresh) {
   els.status.textContent = forceRefresh ? "Reloading RRG data..." : "Loading RRG data...";
 
   const bundled = await loadSameOriginHistories(symbols, forceRefresh).catch(() => null);
-  const loaded = bundled?.histories ?? buildFallbackHistories(symbols);
-  state.dataMeta = bundled?.meta ?? {
-    generatedAt: new Date().toISOString().slice(0, 10),
-    generatedAtUtc: new Date().toISOString(),
-    source: "Local sample data"
-  };
 
-  state.histories = loaded;
+  if (!bundled) {
+    state.dataMeta = null;
+    state.histories = new Map();
+    state.model = { dates: [], benchmarkCloses: [], series: [] };
+    state.dateIndex = 0;
+    state.visualDateIndex = 0;
+    configureSliders();
+    updateLastUpdated();
+    els.status.textContent = "RRG data unavailable";
+    render();
+    return;
+  }
+
+  state.dataMeta = bundled.meta;
+  state.histories = bundled.histories;
   state.hiddenSymbols.clear();
   const buildStartedAt = performance.now();
-  state.model = buildModel(assets, loaded, state.timeframe);
+  state.model = buildModel(assets, bundled.histories, state.timeframe);
   document.documentElement.dataset.modelBuildMs = String(Math.round(performance.now() - buildStartedAt));
   state.dateIndex = Math.max(0, state.model.dates.length - 1);
   state.visualDateIndex = state.dateIndex;
   configureSliders();
   updateLastUpdated();
-  els.status.textContent = bundled ? "RRG data loaded" : "RRG data unavailable; showing sample data";
+  els.status.textContent = "RRG data loaded";
   const renderStartedAt = performance.now();
   render();
   document.documentElement.dataset.renderMs = String(Math.round(performance.now() - renderStartedAt));
@@ -417,40 +481,23 @@ async function loadSameOriginHistories(symbols, forceRefresh) {
   const payload = await response.json();
   const rowsBySymbol = payload.symbols ?? {};
   const histories = new Map();
-  const missingSymbols = [];
+  const unavailableSymbols = [];
 
   symbols.forEach((symbol) => {
-    const rows = rowsBySymbol[symbol];
-    if (!Array.isArray(rows) || rows.length < 180) {
-      if (symbol === BENCHMARK.symbol) {
+    const rows = Array.isArray(rowsBySymbol[symbol]) ? normalizeHistoryRows(rowsBySymbol[symbol]) : [];
+    if (symbol === BENCHMARK.symbol) {
+      if (rows.length < MIN_BENCHMARK_ROWS) {
         throw new Error(`Generated RRG data missing benchmark ${symbol}`);
       }
-      missingSymbols.push(symbol);
+    } else if (rows.length < MIN_UNIVERSE_ROWS) {
+      unavailableSymbols.push(symbol);
       return;
     }
 
-    const normalizedRows = normalizeHistoryRows(rows);
-    if (normalizedRows.length < 180) {
-      if (symbol === BENCHMARK.symbol) {
-        throw new Error(`Generated RRG data has invalid benchmark rows for ${symbol}`);
-      }
-      missingSymbols.push(symbol);
-      return;
-    }
-
-    histories.set(symbol, normalizedRows);
+    histories.set(symbol, rows);
   });
 
-  const benchmarkHistory = histories.get(BENCHMARK.symbol);
-  if (benchmarkHistory?.length && missingSymbols.length) {
-    const benchmarkDates = benchmarkHistory.map((row) => row.date);
-    missingSymbols.forEach((symbol) => {
-      histories.set(symbol, generateSeries(symbol, benchmarkDates, benchmarkHistory));
-    });
-    document.documentElement.dataset.generatedFallbackSymbols = missingSymbols.join(",");
-  } else {
-    document.documentElement.dataset.generatedFallbackSymbols = "";
-  }
+  document.documentElement.dataset.unavailableSymbols = unavailableSymbols.join(",");
 
   return {
     histories,
@@ -458,7 +505,8 @@ async function loadSameOriginHistories(symbols, forceRefresh) {
       generatedAt: payload.generatedAt ?? "",
       generatedAtUtc: payload.generatedAtUtc ?? "",
       source: payload.source ?? "generated RRG data",
-      priceField: payload.priceField ?? "adjusted close"
+      priceField: payload.priceField ?? "adjusted close",
+      unavailableSymbols
     }
   };
 }
@@ -467,60 +515,6 @@ function normalizeHistoryRows(rows) {
   return rows
     .map((row) => ({ date: row.date, close: Number(row.close) }))
     .filter((row) => /^\d{4}-\d{2}-\d{2}$/.test(row.date) && Number.isFinite(row.close) && row.close > 0);
-}
-
-function buildFallbackHistories(symbols) {
-  const dates = recentBusinessDates(720);
-  const benchmark = generateSeries("SPY", dates, null);
-  const histories = new Map([[BENCHMARK.symbol, benchmark]]);
-
-  symbols
-    .filter((symbol) => symbol !== BENCHMARK.symbol)
-    .forEach((symbol) => histories.set(symbol, generateSeries(symbol, dates, benchmark)));
-
-  return histories;
-}
-
-function recentBusinessDates(count) {
-  const dates = [];
-  const cursor = new Date();
-  cursor.setHours(12, 0, 0, 0);
-
-  while (dates.length < count) {
-    const day = cursor.getDay();
-    if (day !== 0 && day !== 6) dates.push(cursor.toISOString().slice(0, 10));
-    cursor.setDate(cursor.getDate() - 1);
-  }
-
-  return dates.reverse();
-}
-
-function generateSeries(symbol, dates, benchmark) {
-  const seed = hashSymbol(symbol);
-  let price = 70 + (seed % 90);
-  let phase = (seed % 360) * (Math.PI / 180);
-  const drift = 0.00014 + ((seed % 11) - 5) * 0.000015;
-  const beta = 0.78 + (seed % 50) / 100;
-
-  return dates.map((date, index) => {
-    const cycle = Math.sin(index / (34 + (seed % 28)) + phase) * 0.006;
-    const noise = Math.sin(index * (0.67 + (seed % 9) / 30) + phase * 2) * 0.004;
-
-    if (benchmark) {
-      const previous = benchmark[Math.max(0, index - 1)].close;
-      const current = benchmark[index].close;
-      const marketReturn = index ? current / previous - 1 : 0;
-      price *= 1 + marketReturn * beta + drift + cycle + noise;
-    } else {
-      price *= 1 + drift + cycle + noise;
-    }
-
-    return { date, close: Number(price.toFixed(4)) };
-  });
-}
-
-function hashSymbol(symbol) {
-  return symbol.split("").reduce((total, char) => total * 31 + char.charCodeAt(0), 17);
 }
 
 function buildModel(assets, histories, timeframe) {
@@ -536,15 +530,10 @@ function buildModel(assets, histories, timeframe) {
       return { ...asset, points };
     });
 
-  const firstValidIndex = series.reduce((maxIndex, item) => {
-    const index = item.points.findIndex((point) => point);
-    return Math.max(maxIndex, index);
-  }, 0);
-
   return {
-    dates: dates.slice(firstValidIndex),
-    benchmarkCloses: benchmarkAligned.slice(firstValidIndex),
-    series: series.map((item) => ({ ...item, points: item.points.slice(firstValidIndex) }))
+    dates,
+    benchmarkCloses: benchmarkAligned,
+    series
   };
 }
 
@@ -573,12 +562,18 @@ function alignToDates(history, dates) {
   const byDate = new Map(history.map((row) => [row.date, row.close]));
   const sorted = history.slice().sort((a, b) => a.date.localeCompare(b.date));
   let pointer = 0;
-  let lastClose = sorted[0]?.close ?? 1;
+  let lastClose = null;
+  const firstDate = sorted[0]?.date;
 
   return dates.map((date) => {
     if (byDate.has(date)) {
       lastClose = byDate.get(date);
       return lastClose;
+    }
+
+    if (firstDate && date < firstDate) {
+      // Before the fund's first real trading day: no price exists, so no synthetic fill.
+      return null;
     }
 
     while (pointer < sorted.length && sorted[pointer].date <= date) {
@@ -1325,6 +1320,7 @@ function updateTimelineButtons() {
 function assetSubtitle(asset) {
   if (!asset?.group) return "";
   if (state.universeKey === "indices") return asset.group;
+  if (state.universeKey === "themes") return `${asset.group} theme proxy`;
   return state.universeKey === "sectors" ? asset.group : `${asset.group} industry proxy`;
 }
 

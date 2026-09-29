@@ -19,7 +19,7 @@ Run-Step "Static verification" {
 }
 
 Run-Step "Refresh RRG data" {
-  python .\scripts\update_rrg_data.py --provider stooq --use-existing-on-fail
+  python .\scripts\update_rrg_data.py --validate-only
   python -c "import json; d=json.load(open('public/data/rrg.json')); print('source=' + d['source']); print('generatedAt=' + d['generatedAt']); print('symbols=' + str(len(d['symbols']))); print('spyLatest=' + str(d['symbols']['SPY'][-1]))"
 }
 

@@ -17,6 +17,7 @@ concurrency:
 jobs:
   update:
     if: github.ref == 'refs/heads/main'
+    timeout-minutes: 150
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -26,10 +27,23 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
-      - name: Generate RRG data
+      - name: Batch A - update first 48 symbols (no deployment)
         env:
           TIINGO_API_KEY: ${{ secrets.TIINGO_API_KEY }}
-        run: python scripts/update_rrg_data.py --provider tiingo
+        run: python scripts/update_rrg_data.py --provider tiingo --batch A --batch-size 48
+      - name: Commit Batch A intermediate data
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: Update generated RRG data (batch A)
+          file_pattern: public/data/rrg.json
+      - name: Wait for the next Tiingo hourly request window
+        run: sleep 3660
+      - name: Batch B - update remaining symbols and finalize
+        env:
+          TIINGO_API_KEY: ${{ secrets.TIINGO_API_KEY }}
+        run: python scripts/update_rrg_data.py --provider tiingo --batch B --batch-size 48 --finalize
+      - name: Validate complete real-data universe
+        run: python scripts/update_rrg_data.py --validate-only
       - name: Commit generated data
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
@@ -47,8 +61,8 @@ jobs:
 
   coverage-proof:
     if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
-    runs-on: ubuntu-latest
     timeout-minutes: 100
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:

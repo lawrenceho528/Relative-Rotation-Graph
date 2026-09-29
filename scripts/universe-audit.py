@@ -23,18 +23,90 @@ EXPECTED_SECTORS = {
     "XLU": "Utilities",
 }
 
-EXPECTED_INDUSTRY_GROUPS = {
-    "Communication Services",
-    "Consumer Discretionary",
-    "Consumer Staples",
-    "Energy",
-    "Financials",
-    "Health Care",
-    "Industrials",
-    "Information Technology",
-    "Materials",
-    "Real Estate",
-    "Utilities",
+EXPECTED_INDUSTRIES = {
+    "OIH": "Oil Services",
+    "XES": "Oil Equipment & Services",
+    "XOP": "Oil & Gas Exploration",
+    "ENFR": "Energy Infrastructure",
+    "CRAK": "Oil Refiners",
+    "XME": "Metals & Mining",
+    "WOOD": "Timber & Forestry",
+    "ITA": "Aerospace & Defense",
+    "XAR": "Aerospace & Defense Equal Weight",
+    "JETS": "Airlines",
+    "BOAT": "Global Shipping",
+    "IYT": "Transportation",
+    "ITB": "Home Construction",
+    "PEJ": "Leisure & Entertainment",
+    "XRT": "Retail",
+    "IHI": "Medical Devices",
+    "XHE": "Health Care Equipment",
+    "IHF": "Health Care Providers",
+    "XHS": "Health Care Services",
+    "IBB": "Biotech Majors",
+    "XBI": "Biotechnology",
+    "PPH": "Pharmaceuticals Equal Weight",
+    "XPH": "Pharmaceuticals",
+    "KBWB": "KBW Banks",
+    "KRE": "Regional Banks",
+    "IYG": "Financial Services",
+    "IAI": "Broker-Dealers & Exchanges",
+    "REM": "Mortgage Real Estate",
+    "IAK": "U.S. Insurance",
+    "KIE": "Insurance",
+    "IGV": "Software",
+    "XSW": "Software & Services",
+    "XTL": "Telecom",
+    "SMH": "Semiconductors",
+    "XSD": "Semiconductors Equal Weight",
+    "INDS": "Industrial Real Estate",
+    "DESK": "Office & Commercial REITs",
+    "HAUS": "Residential REITs",
+}
+
+EXPECTED_THEMES = {
+    "AIQ": "AI & Technology",
+    "CHAT": "Generative AI",
+    "AIS": "AI Supercycle",
+    "AIPO": "AI & Power",
+    "BOTZ": "Robotics & AI",
+    "DRAM": "Memory Chips",
+    "EUV": "Lithography & Photonics",
+    "SKYY": "Cloud Computing",
+    "WCLD": "Cloud Equal Weight",
+    "CIBR": "Cybersecurity",
+    "QTUM": "Quantum Computing",
+    "DTCR": "Data Centers",
+    "IDGT": "Digital Infrastructure",
+    "WGMI": "Bitcoin Miners",
+    "FINX": "FinTech",
+    "BLOK": "Blockchain",
+    "UFO": "Space",
+    "SHLD": "Defense Tech",
+    "DRNZ": "Drones",
+    "DRIV": "Autonomous & EV",
+    "TAN": "Solar",
+    "FAN": "Wind Energy",
+    "ICLN": "Clean Energy",
+    "PBW": "WilderHill Clean Energy",
+    "NUKZ": "Nuclear",
+    "URA": "Uranium",
+    "HYDR": "Hydrogen",
+    "LNGX": "U.S. Natural Gas",
+    "GRID": "Smart Grid",
+    "PAVE": "U.S. Infrastructure",
+    "AIRR": "Industrial Renaissance",
+    "LIT": "Lithium",
+    "BATT": "Lithium & Battery",
+    "COPX": "Copper Miners",
+    "REMX": "Rare Earth & Metals",
+    "GDX": "Gold Miners",
+    "GDXJ": "Junior Gold Miners",
+    "SIL": "Silver Miners",
+    "SILJ": "Junior Silver Miners",
+    "MOO": "Agribusiness",
+    "PHO": "Water Resources",
+    "ARKG": "Genomic Revolution",
 }
 
 EXPECTED_INDICES = {
@@ -52,40 +124,64 @@ def main():
 
     sectors = extract_universe(app_text, "sectors")
     industries = extract_universe(app_text, "industries")
+    themes = extract_universe(app_text, "themes")
     indices = extract_universe(app_text, "indices")
     updater_symbols = extract_updater_symbols(updater_text)
     data_symbols = set(data.get("symbols", {}).keys())
-    app_symbols = {"SPY", *sectors.keys(), *industries.keys(), *indices.keys()}
+    app_symbols = {"SPY", *sectors.keys(), *industries.keys(), *themes.keys(), *indices.keys()}
 
     if {symbol: item["name"] for symbol, item in sectors.items()} != EXPECTED_SECTORS:
         raise AssertionError(f"sector universe does not match expected GICS sector proxies: {sectors}")
     if {item["group"] for item in sectors.values()} != {"GICS Sector"}:
         raise AssertionError("sector universe entries must be identified as GICS Sector proxies")
-    if len(industries) < 29:
-        raise AssertionError(f"industry universe is too small: {len(industries)}")
-    if len({item["name"] for item in industries.values()}) != len(industries):
-        raise AssertionError("industry names must be unique")
-    missing_groups = EXPECTED_INDUSTRY_GROUPS - {item["group"] for item in industries.values()}
-    if missing_groups:
-        raise AssertionError(f"industry universe is missing parent GICS sector groups: {sorted(missing_groups)}")
+    if {symbol: item["name"] for symbol, item in industries.items()} != EXPECTED_INDUSTRIES:
+        raise AssertionError(
+            "industry universe must exactly match the requested 38-symbol replacement; "
+            f"difference: missing={sorted(EXPECTED_INDUSTRIES.keys() - industries.keys())} "
+            f"unexpected={sorted(industries.keys() - EXPECTED_INDUSTRIES.keys())} "
+            f"renamed={sorted(symbol for symbol in EXPECTED_INDUSTRIES.keys() & industries.keys() if EXPECTED_INDUSTRIES[symbol] != industries[symbol]['name'])}"
+        )
+    if {symbol: item["name"] for symbol, item in themes.items()} != EXPECTED_THEMES:
+        raise AssertionError(
+            "themes universe must exactly match the requested 42-symbol list; "
+            f"difference: missing={sorted(EXPECTED_THEMES.keys() - themes.keys())} "
+            f"unexpected={sorted(themes.keys() - EXPECTED_THEMES.keys())} "
+            f"renamed={sorted(symbol for symbol in EXPECTED_THEMES.keys() & themes.keys() if EXPECTED_THEMES[symbol] != themes[symbol]['name'])}"
+        )
     if {symbol: item["name"] for symbol, item in indices.items()} != EXPECTED_INDICES:
         raise AssertionError(f"indices universe does not match expected symbols: {indices}")
     if {item["group"] for item in indices.values()} != {"Market Index"}:
         raise AssertionError("indices universe entries must be identified as Market Index proxies")
 
-    missing_from_updater = sorted(app_symbols - updater_symbols)
+    counts = {"sectors": len(sectors), "industries": len(industries), "themes": len(themes), "indices": len(indices)}
+    if counts != {"sectors": 11, "industries": 38, "themes": 42, "indices": 4}:
+        raise AssertionError(f"universe counts are wrong: {counts}")
+    if len(app_symbols) != 96:
+        raise AssertionError(f"expected 96 unique market-data symbols, found {len(app_symbols)}")
+    if len(updater_symbols) != len(app_symbols) or updater_symbols != app_symbols:
+        raise AssertionError(
+            "updater symbols must be the deduplicated union of every frontend universe: "
+            f"appOnly={sorted(app_symbols - updater_symbols)} updaterOnly={sorted(updater_symbols - app_symbols)}"
+        )
+    if not is_deduplicated(updater_text):
+        raise AssertionError("updater SYMBOLS must be built with deterministic order-preserving deduplication")
+
     missing_from_data = sorted(app_symbols - data_symbols)
     extra_in_data = sorted(data_symbols - app_symbols)
-    if missing_from_updater:
-        raise AssertionError(f"symbols missing from update_rrg_data.py: {missing_from_updater}")
     if missing_from_data:
-        raise AssertionError(f"symbols missing from rrg.json: {missing_from_data}")
+        raise AssertionError(
+            "symbols missing real history in rrg.json (deployment stays blocked until resolved): "
+            f"{missing_from_data}"
+        )
     if extra_in_data:
         raise AssertionError(f"unused symbols in rrg.json: {extra_in_data}")
+    if data.get("warnings"):
+        raise AssertionError(f"generated RRG data must carry no synthetic-data warnings: {data['warnings']}")
 
     print(
         "Universe audit passed: "
-        f"sectors={len(sectors)} industries={len(industries)} indices={len(indices)} dataSymbols={len(data_symbols)}"
+        f"sectors={counts['sectors']} industries={counts['industries']} themes={counts['themes']} "
+        f"indices={counts['indices']} uniqueSymbols={len(app_symbols)} dataSymbols={len(data_symbols)}"
     )
 
 
@@ -105,18 +201,20 @@ def extract_universe(text, key):
 
 
 def extract_updater_symbols(text):
-    sectors = re.search(r"SECTORS\s*=\s*(\[[^\]]+\])", text, re.S)
-    industries = re.search(r"INDUSTRIES\s*=\s*(\[[^\]]+\])", text, re.S)
-    indices = re.search(r"INDICES\s*=\s*(\[[^\]]+\])", text, re.S)
-    if not sectors or not industries or not indices:
-        raise AssertionError("could not find SECTORS, INDUSTRIES, and INDICES in update_rrg_data.py")
+    names = ("SECTORS", "INDUSTRIES", "THEMES", "INDICES")
+    blocks = {name: re.search(rf"{name}\s*=\s*(\[[^\]]+\])", text, re.S) for name in names}
+    if any(block is None for block in blocks.values()):
+        raise AssertionError(f"could not find {', '.join(names)} in update_rrg_data.py")
 
     return {
         "SPY",
-        *[row[0] for row in ast.literal_eval(sectors.group(1))],
-        *[row[0] for row in ast.literal_eval(industries.group(1))],
-        *[row[0] for row in ast.literal_eval(indices.group(1))],
+        *[row[0] for name in names for row in ast.literal_eval(blocks[name].group(1))],
     }
+
+
+def is_deduplicated(updater_text):
+    match = re.search(r"SYMBOLS\s*=\s*list\(\s*dict\.fromkeys\(", updater_text, re.S)
+    return bool(match)
 
 
 if __name__ == "__main__":
