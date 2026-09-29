@@ -110,10 +110,9 @@ EXPECTED_THEMES = {
 }
 
 EXPECTED_INDICES = {
-    "SPX": "S&P 500 Index",
-    "NDX": "Nasdaq 100 Index",
+    "QQQ": "Nasdaq-100 ETF Proxy",
     "IWM": "Russell 2000 ETF",
-    "DJI": "Dow Jones Industrial Average",
+    "DIA": "Dow 30 ETF Proxy",
 }
 
 
@@ -154,10 +153,10 @@ def main():
         raise AssertionError("indices universe entries must be identified as Market Index proxies")
 
     counts = {"sectors": len(sectors), "industries": len(industries), "themes": len(themes), "indices": len(indices)}
-    if counts != {"sectors": 11, "industries": 38, "themes": 42, "indices": 4}:
+    if counts != {"sectors": 11, "industries": 38, "themes": 42, "indices": 3}:
         raise AssertionError(f"universe counts are wrong: {counts}")
-    if len(app_symbols) != 96:
-        raise AssertionError(f"expected 96 unique market-data symbols, found {len(app_symbols)}")
+    if len(app_symbols) != 95:
+        raise AssertionError(f"expected 95 unique market-data symbols, found {len(app_symbols)}")
     if len(updater_symbols) != len(app_symbols) or updater_symbols != app_symbols:
         raise AssertionError(
             "updater symbols must be the deduplicated union of every frontend universe: "

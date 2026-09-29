@@ -138,10 +138,10 @@ def main():
             )
             assert_true(
                 after_indices["activeUniverse"] == "indices"
-                and after_indices["rankRows"] == after_indices["circles"]
-                and after_indices["circles"] >= 1
-                and after_indices["unavailableSymbols"] == "SPX,NDX,DJI",
-                "Indices universe must render only indices with real rows (IWM) and report SPX, NDX, DJI unavailable: "
+                and after_indices["rankRows"] == 3
+                and after_indices["circles"] == 3
+                and after_indices["unavailableSymbols"] == "",
+                "Indices universe must render the three ETF proxies (QQQ, IWM, DIA) with real data and none unavailable: "
                 f"{after_indices}",
             )
 
@@ -369,7 +369,7 @@ def switch_indices(ws):
         })()
         """,
     )
-    wait_until(ws, lambda state: state["activeUniverse"] == "indices" and state["rankRows"] == state["circles"] and state["circles"] >= 1)
+    wait_until(ws, lambda state: state["activeUniverse"] == "indices" and state["rankRows"] == 3 and state["circles"] == 3)
 
 
 def wait_until(ws, predicate):

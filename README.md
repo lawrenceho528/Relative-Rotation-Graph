@@ -65,7 +65,7 @@ The app includes `.nojekyll` so GitHub Pages serves the static PWA files directl
 
 ## Daily Data Update Workflow
 
-`.github/workflows/update-data.yml` runs on weekdays at `22:30 UTC`, safely after the regular U.S. market close. Tiingo Starter allows 50 requests per hour and 500 unique symbols per month, so the 96-symbol universe is updated in two separated request windows:
+`.github/workflows/update-data.yml` runs on weekdays at `22:30 UTC`, safely after the regular U.S. market close. Tiingo Starter allows 50 requests per hour and 500 unique symbols per month, so the 95-symbol universe is updated in two separated request windows (48 + 47):
 
 1. **Batch A** - `python scripts/update_rrg_data.py --provider tiingo --batch A --batch-size 48` downloads at most 48 real histories, writes `public/data/rrg.json`, and commits it. **Nothing is deployed after Batch A**; the intermediate commit only persists real rows so the second window can resume.
 2. The job sleeps 61 minutes to enter a new Tiingo hourly window.
@@ -122,9 +122,9 @@ The app has four universes, selected with the tabs `Sectors | Industries | Theme
 - **Sectors** - 11 GICS sector ETFs (unchanged).
 - **Industries** - 38 industry and sub-industry ETFs.
 - **Themes** - 42 thematic ETFs (AI, cloud, energy transition, miners, and more).
-- **Indices** - SPX, NDX, IWM, DJI.
+- **Indices** - 3 index ETF proxies: `QQQ` (Nasdaq-100), `IWM` (Russell 2000), `DIA` (Dow 30). They are shown as ETF proxies, not literal index values. `SPX` was removed because `SPY` is already the benchmark, so an S&P 500 marker relative to SPY carries no rotation information.
 
-A ticker shared between universes downloads once: `SYMBOLS` in the updater is a deterministic, order-preserving deduplicated union of every universe plus the `SPY` benchmark (96 unique symbols).
+A ticker shared between universes downloads once: `SYMBOLS` in the updater is a deterministic, order-preserving deduplicated union of every universe plus the `SPY` benchmark (95 unique symbols).
 
 ### Short ETF histories
 

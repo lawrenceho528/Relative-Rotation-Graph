@@ -90,17 +90,8 @@ def main():
                     )
 
                 current = list(points.values())[-1]
-                values.append((current["ratio"], current["momentum"]))
                 if length_period in {10, 14, 200} and timeframe == "daily" and symbol in {"XLE", "XLK"}:
                     latest[f"length{length_period}{symbol}"] = current
-
-            ratio_span = max(value[0] for value in values) - min(value[0] for value in values)
-            momentum_span = max(value[1] for value in values) - min(value[1] for value in values)
-            assert_condition(ratio_span > 2, f"length {length_period} {timeframe} RS-Ratio span is too compressed")
-            assert_condition(
-                momentum_span > 0.5,
-                f"length {length_period} {timeframe} RS-Momentum span is too compressed",
-            )
 
     for smooth_period in RRG_PERIODS:
         for timeframe in TIMEFRAMES:
@@ -126,35 +117,18 @@ def main():
                     )
 
                 current = list(points.values())[-1]
-                values.append((current["ratio"], current["momentum"]))
                 if smooth_period in {10, 20, 200} and timeframe == "daily" and symbol in {"XLE", "XLK"}:
                     latest[f"smooth{smooth_period}{symbol}"] = current
 
-            ratio_span = max(value[0] for value in values) - min(value[0] for value in values)
-            momentum_span = max(value[1] for value in values) - min(value[1] for value in values)
-            assert_condition(ratio_span > 2, f"smooth {smooth_period} {timeframe} RS-Ratio span is too compressed")
-            assert_condition(momentum_span > 0.5, f"smooth {smooth_period} {timeframe} RS-Momentum span is too compressed")
-
-    assert_condition(
-        abs(latest["length10XLK"]["ratio"] - latest["length200XLK"]["ratio"]) > 2,
-        "Length selector should materially change RS-Ratio",
-    )
-    assert_condition(
-        abs(latest["length10XLE"]["momentum"] - latest["length200XLE"]["momentum"]) > 0.5,
-        "Length selector should materially change RS-Momentum",
-    )
-    assert_condition(
-        abs(latest["smooth10XLK"]["ratio"] - latest["smooth200XLK"]["ratio"]) > 2,
-        "Smooth selector should materially change RS-Ratio",
-    )
-    assert_condition(
-        abs(latest["smooth10XLE"]["momentum"] - latest["smooth200XLE"]["momentum"]) > 0.5,
-        "Smooth selector should materially change RS-Momentum",
-    )
+    sensitivity = run_parameter_sensitivity_fixture()
 
     print(
         "RRG formula audit passed: "
         f"points={point_count} "
+        f"fixture[endRatio10={sensitivity['end_ratio10']:.4f} endMomentum10={sensitivity['end_momentum10']:.4f} "
+        f"flipRatioLen10={sensitivity['flip_ratio_len10']:.4f} flipRatioLen200={sensitivity['flip_ratio_len200']:.4f} "
+        f"flipRatioSmooth10={sensitivity['flip_ratio_smooth10']:.4f} flipRatioSmooth200={sensitivity['flip_ratio_smooth200']:.4f} "
+        f"flipMomentumLen10={sensitivity['flip_momentum_len10']:.4f} flipMomentumLen200={sensitivity['flip_momentum_len200']:.4f}] "
         f"length10XLK={format_point(latest['length10XLK'])} "
         f"length14XLK={format_point(latest['length14XLK'])} "
         f"length200XLK={format_point(latest['length200XLK'])} "
@@ -163,6 +137,97 @@ def main():
         f"smooth200XLK={format_point(latest['smooth200XLK'])} "
         f"smooth20XLE={format_point(latest['smooth20XLE'])}"
     )
+
+
+def run_parameter_sensitivity_fixture():
+    """Deterministic parameter-sensitivity proof on a fixed two-regime series.
+
+    The fixture never reads market data: the benchmark is a constant 100 and the
+    asset holds RS = 1.2 for 250 sessions, then RS = 0.8 for 250 sessions. All
+    expectations below are analytic properties of the Pine-style EMA cascade:
+
+    - A long constant-RS regime drives RS-Ratio to 100 and RS-Momentum to 100
+      (EMA(RS, length) converges to the constant, so RS/EMA(RS) = 1). With
+      length 10 the remaining old-regime weight after 250 sessions is
+      (9/11)^250 < 1e-19, so the anchor is exact to machine precision.
+    - Thirty sessions after the regime flip the shorter EMA has adapted more:
+      RS-Ratio with length 200 must sit strictly farther below 100 than with
+      length 10, and the same monotonic-lag ordering must hold for the smooth
+      parameter. RS-Momentum straddles 100: the lightly lagged cascade has
+      already recovered above 100 while the heavily lagged one is still below.
+      Strict orderings are used instead of magnitude thresholds, so nothing is
+      tuned to current market conditions.
+    """
+    benchmark = [100.0] * 500
+    asset = [120.0] * 250 + [80.0] * 250
+    flip_index = 280  # 30 sessions after the regime change at index 250
+
+    def points_for(length_period, smooth_period):
+        computed = compute_rrg_points(asset, benchmark, length_period, smooth_period)
+        assert all(point is not None for point in computed), "fixture series must produce points everywhere"
+        return computed
+
+    end10 = points_for(10, 10)[499]
+    assert_close(end10[0], 100.0, "fixture converged RS-Ratio", tolerance=1e-6)
+    assert_close(end10[1], 100.0, "fixture converged RS-Momentum", tolerance=1e-6)
+
+    first_regime_end = points_for(10, 10)[249]
+    assert_close(first_regime_end[0], 100.0, "fixture first-regime RS-Ratio", tolerance=1e-6)
+    assert_close(first_regime_end[1], 100.0, "fixture first-regime RS-Momentum", tolerance=1e-6)
+
+    # Every parameter combination stays inside the rigorous analytic envelope:
+    # RS stays within [0.8, 1.2] on the fixture, so the ratio of RS to its EMA
+    # is bounded by [2/3, 3/2], and EMAs preserve bounds. This catches blowups
+    # without pretending to be a convergence estimate.
+    for length_period in (10, 200):
+        for smooth_period in (10, 200):
+            end_ratio, end_momentum = points_for(length_period, smooth_period)[499]
+            assert_condition(66.0 < end_ratio < 151.0, f"fixture end RS-Ratio out of analytic bounds at length {length_period} smooth {smooth_period}")
+            assert_condition(66.0 < end_momentum < 151.0, f"fixture end RS-Momentum out of analytic bounds at length {length_period} smooth {smooth_period}")
+
+    flip_ratio_len10 = points_for(10, DEFAULT_SMOOTH_PERIOD)[flip_index][0]
+    flip_ratio_len200 = points_for(200, DEFAULT_SMOOTH_PERIOD)[flip_index][0]
+    flip_ratio_smooth10 = points_for(DEFAULT_LENGTH_PERIOD, 10)[flip_index][0]
+    flip_ratio_smooth200 = points_for(DEFAULT_LENGTH_PERIOD, 200)[flip_index][0]
+    flip_momentum_len10 = points_for(10, DEFAULT_SMOOTH_PERIOD)[flip_index][1]
+    flip_momentum_len200 = points_for(200, DEFAULT_SMOOTH_PERIOD)[flip_index][1]
+    flip_momentum_smooth10 = points_for(DEFAULT_LENGTH_PERIOD, 10)[flip_index][1]
+    flip_momentum_smooth200 = points_for(DEFAULT_LENGTH_PERIOD, 200)[flip_index][1]
+
+    # Strict analytic orderings: heavier EMA lag keeps the post-flip RS-Ratio
+    # farther below 100, while RS-Momentum straddles 100 - the lightly smoothed
+    # cascade has already recovered above 100, the heavily lagged one is still
+    # below. These hold for the fixed series independent of market data, so
+    # they are stable formula invariants rather than tuned thresholds.
+    assert_condition(
+        flip_ratio_len200 < flip_ratio_len10 < 100.0,
+        "length sensitivity: RS-Ratio ordering violated on the deterministic fixture",
+    )
+    assert_condition(
+        flip_ratio_smooth200 < flip_ratio_smooth10 < 100.0,
+        "smooth sensitivity: RS-Ratio ordering violated on the deterministic fixture",
+    )
+    assert_condition(
+        flip_momentum_len200 < 100.0 < flip_momentum_len10,
+        "length sensitivity: RS-Momentum straddle violated on the deterministic fixture",
+    )
+    assert_condition(
+        flip_momentum_smooth200 < 100.0 < flip_momentum_smooth10,
+        "smooth sensitivity: RS-Momentum straddle violated on the deterministic fixture",
+    )
+
+    return {
+        "end_ratio10": end10[0],
+        "end_momentum10": end10[1],
+        "flip_ratio_len10": flip_ratio_len10,
+        "flip_ratio_len200": flip_ratio_len200,
+        "flip_ratio_smooth10": flip_ratio_smooth10,
+        "flip_ratio_smooth200": flip_ratio_smooth200,
+        "flip_momentum_len10": flip_momentum_len10,
+        "flip_momentum_len200": flip_momentum_len200,
+        "flip_momentum_smooth10": flip_momentum_smooth10,
+        "flip_momentum_smooth200": flip_momentum_smooth200,
+    }
 
 
 def build_points(symbol, timeframe, length_period, smooth_period):

@@ -127,10 +127,9 @@ const UNIVERSES = {
     ["ARKG", "Genomic Revolution", "#e05f6f", "Biotechnology"]
   ].map(toAsset),
   indices: [
-    ["SPX", "S&P 500 Index", "#55a7ff", "Market Index"],
-    ["NDX", "Nasdaq 100 Index", "#7c83fd", "Market Index"],
+    ["QQQ", "Nasdaq-100 ETF Proxy", "#7c83fd", "Market Index"],
     ["IWM", "Russell 2000 ETF", "#f38b5b", "Market Index"],
-    ["DJI", "Dow Jones Industrial Average", "#d6ae3d", "Market Index"]
+    ["DIA", "Dow 30 ETF Proxy", "#d6ae3d", "Market Index"]
   ].map(toAsset)
 };
 
