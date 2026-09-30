@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import pathlib
 import shutil
 import subprocess
@@ -13,6 +14,93 @@ CAPTURE_PATH = ROOT / "scripts" / "browser-capture.py"
 spec = importlib.util.spec_from_file_location("browser_capture", CAPTURE_PATH)
 browser_capture = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(browser_capture)
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+THEMES = [
+    "AIQ", "CHAT", "AIS", "AIPO", "BOTZ", "DRAM", "EUV", "SKYY", "WCLD", "CIBR",
+    "QTUM", "DTCR", "IDGT", "WGMI", "FINX", "BLOK", "UFO", "SHLD", "DRNZ", "DRIV",
+    "TAN", "FAN", "ICLN", "PBW", "NUKZ", "URA", "HYDR", "LNGX", "GRID", "PAVE",
+    "AIRR", "LIT", "BATT", "COPX", "REMX", "GDX", "GDXJ", "SIL", "SILJ", "MOO",
+    "PHO", "ARKG",
+]
+MIN_THEME_ROWS = 5
+
+
+def load_theme_history():
+    """First real close date and row count per theme from the validated cache."""
+    payload = json.loads((ROOT / "public" / "data" / "rrg.json").read_text(encoding="utf-8"))
+    return {
+        symbol: (rows[0]["date"], len(rows))
+        for symbol, rows in payload["symbols"].items()
+        if symbol in THEMES
+    }
+
+
+def expected_theme_sets(slider_index):
+    """Deterministic expected sets for a slider index.
+
+    Mirrors the frontend contract: a theme renders at a date only when the daily
+    timeline reaches its first real close, and it participates at all only with
+    the minimum usable row count. Everything else stays unavailable.
+    """
+    payload = json.loads((ROOT / "public" / "data" / "rrg.json").read_text(encoding="utf-8"))
+    dates = [row["date"] for row in payload["symbols"]["SPY"]]
+    iso_date = dates[slider_index]
+    expected = sorted(
+        symbol
+        for symbol, (first_date, rows) in load_theme_history().items()
+        if first_date <= iso_date and rows >= MIN_THEME_ROWS
+    )
+    return expected, sorted(set(THEMES) - set(expected))
+
+
+def read_theme_symbols(ws):
+    return set(
+        json.loads(
+            ws.call(
+                "Runtime.evaluate",
+                {
+                    "expression": "JSON.stringify([...document.querySelectorAll('#rrgChart circle[data-symbol]')].map((node) => node.dataset.symbol))",
+                    "returnByValue": True,
+                },
+            )["result"]["value"]
+        )
+    )
+
+
+def read_theme_symbols_settled(ws, deadline_seconds=10):
+    """Sample the rendered theme marker set only after it stops changing.
+
+    The app re-renders through requestAnimationFrame-driven date animations, so a
+    single DOM sample can catch a transient animation frame. The settled state is
+    two consecutive identical samples of both the marker set and its size.
+    """
+    deadline = time.time() + deadline_seconds
+    previous = None
+    while time.time() < deadline:
+        current = read_theme_symbols(ws)
+        if previous is not None and current == previous:
+            return current
+        previous = current
+        time.sleep(0.12)
+    raise RuntimeError(f"Theme marker set never settled. Last set: {sorted(previous)}")
+
+
+def set_slider_to(ws, index):
+    evaluate_json(
+        ws,
+        f"""
+        (() => {{
+          const slider = document.querySelector('#dateSlider');
+          slider.value = String(Math.max(0, Math.min(Number(slider.max), {index})));
+          slider.dispatchEvent(new Event('input', {{ bubbles: true }}));
+          return JSON.stringify({{ ok: true }});
+        }})()
+        """,
+    )
+    time.sleep(0.1)
 
 
 def main():
@@ -140,13 +228,56 @@ def main():
                 after_selection["selectedSymbol"] != after_industries["selectedSymbol"],
                 "Selecting a rank row did not update the detail panel",
             )
+            # Themes: a universe switch resets the timeline to the latest date,
+            # so first verify the complete 42-symbol universe there (contract C).
             click_themes(ws)
             after_themes = read_state(ws)
             assert_true(
                 after_themes["activeUniverse"] == "themes"
                 and after_themes["circles"] == 42
                 and after_themes["selectedSymbol"] == "AIQ",
-                f"Themes toggle did not render the 42-symbol theme universe: {after_themes}",
+                f"Themes toggle did not render the complete 42-symbol universe at the latest date: {after_themes}",
+            )
+
+            # Contract A: at a historical date, only themes with genuine real
+            # history on or before that date may render; pre-inception themes
+            # must stay unavailable (no synthesis, no back-fill).
+            set_slider_to(ws, int(after_themes["sliderMax"]) - 300)
+            rendered_middle = read_theme_symbols_settled(ws)
+            middle_state = read_state(ws)
+            middle_index = int(middle_state["sliderValue"])
+            expected_middle, unavailable_middle = expected_theme_sets(middle_index)
+            assert_true(
+                middle_state["activeUniverse"] == "themes" and sorted(rendered_middle) == expected_middle,
+                "Themes at a historical date must render exactly the symbols with real history at that date: "
+                f"date={middle_state['selectedDate']} expected={len(expected_middle)} "
+                f"missing={sorted(set(expected_middle) - rendered_middle)} "
+                f"unexpected={sorted(rendered_middle - set(expected_middle))}",
+            )
+            assert_true(
+                unavailable_middle and all(symbol not in rendered_middle for symbol in unavailable_middle),
+                "Pre-inception themes must stay unavailable at the historical date: "
+                f"unavailable={unavailable_middle} rendered={sorted(rendered_middle)}",
+            )
+
+            # Contract B/C: at the latest date the full 42-symbol universe renders
+            # and selection behavior works normally.
+            set_slider_near_end(ws)
+            rendered_latest = read_theme_symbols_settled(ws)
+            after_latest = read_state(ws)
+            expected_latest, _ = expected_theme_sets(int(after_latest["sliderValue"]))
+            assert_true(
+                after_latest["activeUniverse"] == "themes"
+                and sorted(rendered_latest) == expected_latest == sorted(THEMES)
+                and after_latest["circles"] == 42,
+                f"Themes must render the complete universe at the latest date: {after_latest} "
+                f"missing={sorted(set(THEMES) - rendered_latest)} unexpected={sorted(rendered_latest - set(THEMES))}",
+            )
+            select_third_rank_row(ws)
+            after_theme_selection = read_state(ws)
+            assert_true(
+                after_theme_selection["selectedSymbol"] != "AIQ",
+                f"Selecting a theme rank row did not update the detail panel: {after_theme_selection}",
             )
 
             print(
@@ -157,8 +288,9 @@ def main():
                 f"weeklyMax={after_weekly['sliderMax']} monthlyMax={after_monthly['sliderMax']}, "
                 f"playback={before_playback['sliderValue']}->{after_playback['sliderValue']}, "
                 f"industryMarkers={after_industries['circles']} tailDots={after_industries['tailDots']}, "
-                f"themeMarkers={after_themes['circles']}, "
-                f"selected={after_selection['selectedSymbol']}"
+                f"themeMarkersMiddle={len(rendered_middle)} unavailableMiddle={len(unavailable_middle)} "
+                f"themeMarkersLatest={after_latest['circles']}, "
+                f"selected={after_theme_selection['selectedSymbol']}"
             )
         finally:
             ws.close()
@@ -371,11 +503,22 @@ def click_themes(ws):
               var rows = [];
               var cards = document.querySelectorAll('.rank-row b');
               cards.forEach(function(node){ rows.push(node.textContent.trim()); });
+              var dbg = window.__rrgDebug || {};
+              var missing = dbg.series ? dbg.series.length === 42 ? [] : null : null;
               return {
                 rankSymbols: rows.slice(0, 50),
                 rankCount: rows.length,
                 dataGeneratedAt: document.documentElement.dataset.dataGeneratedAt || '',
-                unavailableSymbols: document.documentElement.dataset.unavailableSymbols || ''
+                unavailableSymbols: document.documentElement.dataset.unavailableSymbols || '',
+                debugUniverse: dbg.universe || null,
+                debugDateIndex: dbg.dateIndex !== undefined ? dbg.dateIndex : null,
+                debugDates: dbg.dates !== undefined ? dbg.dates : null,
+                debugHistories: dbg.histories ? dbg.histories.length : null,
+                debugSeries: dbg.series ? dbg.series.length : null,
+                debugCircles: dbg.circles !== undefined ? dbg.circles : null,
+                debugAnimating: dbg.animating !== undefined ? dbg.animating : null,
+                debugVisualDateIndex: dbg.visualDateIndex !== undefined ? dbg.visualDateIndex : null,
+                debugMissingSeries: dbg.histories && dbg.series ? null : null
               };
             })())
             """,

@@ -157,7 +157,8 @@ const state = {
   pinchZoom: null,
   chartPan: null,
   playbackTimer: null,
-  timelineAnimation: null
+  timelineAnimation: null,
+  timelineAnimationToken: 0,
 };
 
 let lastTouchEndAt = 0;
@@ -424,6 +425,7 @@ async function loadUniverse(forceRefresh) {
   if (!bundled) {
     state.dataMeta = null;
     state.histories = new Map();
+    cancelTimelineAnimation();
     state.model = { dates: [], benchmarkCloses: [], series: [] };
     state.dateIndex = 0;
     state.visualDateIndex = 0;
@@ -437,6 +439,7 @@ async function loadUniverse(forceRefresh) {
   state.dataMeta = bundled.meta;
   state.histories = bundled.histories;
   state.hiddenSymbols.clear();
+  cancelTimelineAnimation();
   const buildStartedAt = performance.now();
   state.model = buildModel(assets, bundled.histories, state.timeframe);
   document.documentElement.dataset.modelBuildMs = String(Math.round(performance.now() - buildStartedAt));
@@ -458,6 +461,7 @@ function rebuildCurrentModel() {
   }
 
   const assets = UNIVERSES[state.universeKey];
+  cancelTimelineAnimation();
   const buildStartedAt = performance.now();
   state.model = buildModel(assets, state.histories, state.timeframe);
   document.documentElement.dataset.modelBuildMs = String(Math.round(performance.now() - buildStartedAt));
@@ -1254,12 +1258,16 @@ function stopPlayback() {
 
 function animateVisualDate(target) {
   cancelTimelineAnimation();
+  const token = state.timelineAnimationToken;
   const start = Number.isFinite(state.visualDateIndex) ? state.visualDateIndex : state.dateIndex;
   const distance = Math.abs(target - start);
   const duration = clamp(160 + distance * 22, 180, 520);
   const startedAt = performance.now();
 
   const tick = (now) => {
+    // A canceled or superseded animation must not clobber the visual date:
+    // its scheduled frame can fire after a universe switch or a newer animation.
+    if (state.timelineAnimationToken !== token) return;
     const progress = clamp((now - startedAt) / duration, 0, 1);
     const eased = 1 - (1 - progress) ** 3;
     state.visualDateIndex = start + (target - start) * eased;
@@ -1278,6 +1286,7 @@ function animateVisualDate(target) {
 }
 
 function cancelTimelineAnimation() {
+  state.timelineAnimationToken += 1;
   if (!state.timelineAnimation) return;
   cancelAnimationFrame(state.timelineAnimation);
   state.timelineAnimation = null;
@@ -1378,3 +1387,5 @@ function preventDoubleTapZoom(event) {
 function preventGestureZoom(event) {
   event.preventDefault();
 }
+
+
