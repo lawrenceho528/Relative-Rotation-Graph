@@ -355,8 +355,14 @@ input[type="range"] {
    primary pointer. Touch-primary devices — iPhone/iPad report (pointer: coarse)
    — never match, so pinch-zoom stays the only zoom control there. */
 @media (min-width: 1201px) and (pointer: fine), (min-width: 1201px) and (pointer: none) {
+  .chart-stage {
+    padding-right: 48px;
+  }
+
   .chart-zoom {
     display: flex;
+    right: 0;
+    width: 48px;
   }
 }
 

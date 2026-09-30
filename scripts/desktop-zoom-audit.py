@@ -98,6 +98,8 @@ def collect_state(ws):
       const stage = document.querySelector('.chart-stage');
       const sliderRect = slider ? slider.getBoundingClientRect() : null;
       const stageRect = stage ? stage.getBoundingClientRect() : null;
+      const svgRect = document.querySelector('#rrgChart').getBoundingClientRect();
+      const controlRect = document.querySelector('.chart-zoom').getBoundingClientRect();
       const style = slider ? getComputedStyle(slider) : null;
       return {
         loaded: document.querySelector('#dataStatus')?.textContent.includes('RRG data loaded') || false,
@@ -110,6 +112,8 @@ def collect_state(ws):
         chartMaxY: Number(document.querySelector('#rrgChart')?.dataset.chartMaxY || 0),
         circles: document.querySelectorAll('#rrgChart circle[data-symbol]').length,
         activeUniverse: document.querySelector('[data-universe].active')?.dataset.universe || '',
+        gutterWidth: stageRect.right - svgRect.right,
+        controlOutsideSvg: controlRect.left >= svgRect.right && sliderRect.left >= svgRect.right,
         slider: {
           present: Boolean(slider),
           visible: Boolean(slider && style.display !== 'none' && sliderRect.width > 0 && sliderRect.height > 0),
@@ -140,8 +144,11 @@ def assert_slider_visibility(name, state, expect_visible):
         assert_true(slider["visible"], f"{name}: zoom slider should be visible: {slider}")
         assert_true(slider["vertical"], f"{name}: zoom slider must be vertical: {slider}")
         assert_true(slider["rightOfStageCenter"], f"{name}: zoom slider must sit on the right of the chart: {slider}")
+        assert_true(state["controlOutsideSvg"], f"{name}: zoom control overlaps the SVG: {state}")
+        assert_true(abs(state["gutterWidth"] - 48) < 0.01, f"{name}: expected a 48px chart gutter: {state}")
     else:
         assert_true(not slider["visible"], f"{name}: zoom slider must be hidden: {slider}")
+        assert_true(abs(state["gutterWidth"]) < 0.01, f"{name}: hidden slider must not reserve chart width: {state}")
 
 
 def verify_desktop_zoom(name, ws):

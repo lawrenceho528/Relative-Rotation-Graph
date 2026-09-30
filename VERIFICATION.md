@@ -646,3 +646,13 @@ All checks passed.
 ```
 
 The desktop viewport slider behaviour is verified by `scripts/desktop-zoom-audit.py`: default extent 10 shows 90-110 on both axes, extent 20 shows 80-120 on both axes, markers re-render, pan still works, slider zoom after pan preserves the centre, ArrowDown/ArrowUp step the extent, and the slider is hidden at 1200px width, under touch emulation at desktop width (the iPad pointer gate), and at 744x1133 / 1133x744 iPad viewports. `rgg-desktop-themes-zoom.png` captures the Themes universe at the 80-120 axis range.
+
+## Desktop Zoom Gutter Refinement
+
+Date: 2026-09-30
+
+The existing desktop-only media query now reserves exactly 48px via `.chart-stage { padding-right: 48px; }`. The SVG fills the remaining content width; `.chart-zoom` occupies the reserved gutter with `right: 0; width: 48px`. No JavaScript, coordinate calculations, zoom mapping, or desktop detection changed.
+
+The desktop audit now asserts that the whole zoom control and slider begin at or beyond the SVG's right edge, that the reserved gutter is 48px, and that hidden-control layouts reserve zero gutter width. Existing 90-110 / 80-120 axis, marker redraw, pan, centre-preserving zoom, and keyboard checks passed.
+
+`pwsh -File ./scripts/run-all-checks.ps1`: All checks passed. Existing interaction, chart controls, pinch/touch, iPad layout, and visual audits remain green. `rgg-desktop-themes-zoom.png` was regenerated at extent 20 and visually inspected: the vertical slider and visible ±20 readout sit outside the SVG in the right-side gutter.
