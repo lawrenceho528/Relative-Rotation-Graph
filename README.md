@@ -10,6 +10,7 @@ Interactive iPad-ready Relative Rotation Graph for U.S. equity sector, industry,
 - Date control through the timeline slider and previous/play/next buttons.
 - Graph panning by pressing and dragging inside the chart.
 - Continuous two-finger graph zoom and pan inside the chart.
+- Desktop browsers wider than 1200px with a mouse-class pointer also get a compact vertical zoom slider beside the chart; it drives the same `chartExtent` state as pinch zoom and is hidden on iPhone/iPad.
 - Generated same-origin RRG data from `public/data/rrg.json`; the browser does not call market-data APIs.
 - Network-first app/data caching with offline fallback after the app has been opened once.
 
@@ -163,6 +164,7 @@ python .\scripts\universe-audit.py
 powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 python .\scripts\workflow-audit.py
 python .\scripts\chart-controls-audit.py
+python .\scripts\desktop-zoom-audit.py
 python .\scripts\browser-interaction.py
 python .\scripts\ipad-touch-audit.py
 python .\scripts\zoom-lock-audit.py

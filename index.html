@@ -88,6 +88,19 @@
           <div class="chart-stage">
             <svg id="rrgChart" role="img" aria-label="Relative Rotation Graph chart"></svg>
             <div class="tooltip hidden" id="tooltip"></div>
+            <div class="chart-zoom">
+              <input
+                id="chartZoomSlider"
+                type="range"
+                min="1"
+                max="50"
+                step="1"
+                value="10"
+                aria-label="Chart axis range"
+                title="Chart axis range"
+              />
+              <output id="chartZoomReadout" for="chartZoomSlider">±10</output>
+            </div>
           </div>
         </div>
 

@@ -109,6 +109,10 @@ Run-Step "Chart scale and visibility controls audit" {
   & $python scripts/chart-controls-audit.py
 }
 
+Run-Step "Desktop zoom slider audit" {
+  & $python scripts/desktop-zoom-audit.py
+}
+
 Run-Step "Double tap zoom lock audit" {
   & $python scripts/zoom-lock-audit.py
 }

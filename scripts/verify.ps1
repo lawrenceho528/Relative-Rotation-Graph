@@ -19,6 +19,7 @@ $requiredFiles = @(
   "scripts/browser-pointer.py",
   "scripts/data-freshness-audit.py",
   "scripts/data-update-audit.py",
+  "scripts/desktop-zoom-audit.py",
   "scripts/deploy-audit.ps1",
   "scripts/dist-runtime-audit.py",
   "scripts/install-preflight.ps1",
@@ -161,5 +162,9 @@ Assert-Check ($js.Contains('function loadBuildInfo') -and $js.Contains('dataset.
 Assert-Check ($css.Contains('-webkit-text-size-adjust: 100%') -and $css.Contains('-webkit-tap-highlight-color: transparent') -and $css.Contains('touch-action: manipulation') -and $css.Contains('.ema-control')) "iPad Safari touch/text polish"
 Assert-Check ($css.Contains('-webkit-overflow-scrolling: touch') -and $css.Contains('touch-action: pan-x') -and $css.Contains('touch-action: none')) "iPad touch scrolling and chart pinch controls"
 Assert-Check ($css.Contains('@media (max-width: 900px)')) "iPad mini responsive layout"
+Assert-Check ($html.Contains('id="chartZoomSlider"') -and $html.Contains('id="chartZoomReadout"') -and $html.Contains('aria-label="Chart axis range"')) "desktop chart zoom slider"
+Assert-Check ($css.Contains('@media (min-width: 1201px) and (pointer: fine), (min-width: 1201px) and (pointer: none)') -and $css.Contains('writing-mode: vertical-lr')) "desktop-only vertical zoom slider styling"
+Assert-Check ($js.Contains('els.chartZoomSlider.addEventListener("input"') -and $js.Contains('setChartExtent(Number(els.chartZoomSlider.value))') -and $js.Contains('els.chartZoomReadout.textContent')) "zoom slider uses canonical setChartExtent state"
+Assert-Check (Test-Path (Join-Path $root "scripts/desktop-zoom-audit.py")) "desktop zoom slider audit"
 
 Write-Output "Static verification passed."

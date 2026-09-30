@@ -318,6 +318,48 @@ input[type="range"] {
   display: none;
 }
 
+/* Desktop-only vertical zoom slider: hidden by default so phone/iPad layouts
+   keep the untouched pinch-zoom interaction. */
+.chart-zoom {
+  position: absolute;
+  top: 16px;
+  right: 12px;
+  z-index: 2;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.chart-zoom input[type="range"] {
+  width: 20px;
+  height: min(48vh, 440px);
+  min-height: 140px;
+  margin: 0;
+  /* vertical-lr renders min at the top: top = smaller extent = zoom in. */
+  writing-mode: vertical-lr;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.chart-zoom output {
+  color: #24324a;
+  font-size: 0.72rem;
+  font-weight: 720;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(24, 32, 51, 0.08);
+}
+
+/* Visible only at desktop widths with a mouse-class (pointer: fine) or absent
+   primary pointer. Touch-primary devices — iPhone/iPad report (pointer: coarse)
+   — never match, so pinch-zoom stays the only zoom control there. */
+@media (min-width: 1201px) and (pointer: fine), (min-width: 1201px) and (pointer: none) {
+  .chart-zoom {
+    display: flex;
+  }
+}
+
 .side-panel {
   min-height: 0;
   display: grid;

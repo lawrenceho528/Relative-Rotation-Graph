@@ -3,6 +3,7 @@
 .browser-profile-*/
 chrome-dom.txt
 rgg-ipad-mini*.png
+rgg-desktop-*.png
 *.log
 dist/
 deploy/

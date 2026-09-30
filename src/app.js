@@ -182,6 +182,8 @@ const els = {
   currentDate: document.querySelector("#currentDate"),
   endDate: document.querySelector("#endDate"),
   tooltip: document.querySelector("#tooltip"),
+  chartZoomSlider: document.querySelector("#chartZoomSlider"),
+  chartZoomReadout: document.querySelector("#chartZoomReadout"),
   refreshButton: document.querySelector("#refreshButton"),
   hideAllButton: document.querySelector("#hideAllButton"),
   showAllButton: document.querySelector("#showAllButton"),
@@ -225,6 +227,9 @@ els.tailLength.addEventListener("input", () => {
   state.tailLength = Number(els.tailLength.value);
   updateTailOutput();
   render();
+});
+els.chartZoomSlider.addEventListener("input", () => {
+  setChartExtent(Number(els.chartZoomSlider.value));
 });
 els.lengthPeriod.addEventListener("change", () => {
   const period = Number(els.lengthPeriod.value);
@@ -1057,6 +1062,14 @@ function updateZoomOutput() {
   document.documentElement.dataset.chartExtent = String(state.chartExtent);
   document.documentElement.dataset.chartCenterX = formatChartNumber(state.chartCenterX);
   document.documentElement.dataset.chartCenterY = formatChartNumber(state.chartCenterY);
+  // Single canonical zoom state: the desktop slider mirrors chartExtent no
+  // matter which mechanism (slider, pinch) produced it.
+  if (els.chartZoomSlider) {
+    els.chartZoomSlider.value = String(state.chartExtent);
+  }
+  if (els.chartZoomReadout) {
+    els.chartZoomReadout.textContent = `±${formatExtent(state.chartExtent)}`;
+  }
 }
 
 function formatExtent(extent) {

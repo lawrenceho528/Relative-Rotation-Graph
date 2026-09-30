@@ -625,3 +625,24 @@ Offline audit passed: cacheCount=1 offlineCircles=11 offlineTailDots=187 offline
 ## Environment Note
 
 Chrome emitted iPad-mini viewport screenshots in this desktop environment. The updated objective does not require a physical iPad report; installability is verified by the PWA, package, local preflight, runtime, offline, iPad viewport, and touch-emulation audits above.
+
+## Desktop Chart Zoom Slider
+
+Date: 2026-09-30
+
+Desktop browsers wider than 1200px with a mouse-class primary pointer (`(min-width: 1201px) and (pointer: fine)`, plus `(pointer: none)` so no-input automation environments behave as desktop) now show a compact vertical zoom slider on the right edge of the chart (`#chartZoomSlider`). The slider writes through the existing `setChartExtent`/`chartExtent` state — the same state pinch zoom uses — so any mechanism updates the slider and the `±N` axis-range readout (`#chartZoomReadout`). Top of the track = zoom in (extent 1), bottom = zoom out (extent 50); arrow keys follow the visual direction (ArrowDown zooms out, ArrowUp zooms in). Zooming expands both axes around the current `chartCenterX/chartCenterY`, so desktop panning keeps the centre. iPhone/iPad/touch-primary layouts never match the media query, keeping pinch zoom as the only chart zoom there.
+
+Result:
+
+```text
+Static verification passed.
+Desktop zoom slider audit passed: desktop: sliderVisible=True extent=10, desktop-narrow: sliderVisible=False extent=10, desktop-touch: sliderVisible=False extent=10, ipad-portrait: sliderVisible=False extent=10, ipad-landscape: sliderVisible=False extent=10
+Chart controls audit passed: extent 10 pinch 10->4.55->9.1 pan 100/100->96.92/102.8 twoFinger 9.1->4.9 plot=862x560 markers 11->10->11 all 0->11 indices=3
+Interaction smoke passed: date Sep 28, 2026 -> Sep 23, 2026, length=14->50 smooth=20->150, weeklyMax=259 monthlyMax=60, playback=1245->1246, industryMarkers=38 tailDots=646, themeMarkersMiddle=37 unavailableMiddle=5 themeMarkersLatest=42, selected=SKYY
+iPad touch audit passed: sliderDate=Oct 21, 2022 chartPan=100/100->105.6/100 industryMarkers=38 tailDots=646 markerSelected=REM rankSelected=XSD touchPoints=5
+iPad layout audit passed: portrait: overflow=-15 sliderY=286 chartY=481, landscape: overflow=-15 sliderY=216 chartY=380
+Zoom lock audit passed: viewport='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover' touchAction=manipulation secondTapPrevented=True gesturePrevented=True
+All checks passed.
+```
+
+The desktop viewport slider behaviour is verified by `scripts/desktop-zoom-audit.py`: default extent 10 shows 90-110 on both axes, extent 20 shows 80-120 on both axes, markers re-render, pan still works, slider zoom after pan preserves the centre, ArrowDown/ArrowUp step the extent, and the slider is hidden at 1200px width, under touch emulation at desktop width (the iPad pointer gate), and at 744x1133 / 1133x744 iPad viewports. `rgg-desktop-themes-zoom.png` captures the Themes universe at the 80-120 axis range.
