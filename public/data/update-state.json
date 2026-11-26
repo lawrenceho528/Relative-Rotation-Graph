@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "phase": "A",
-  "cycle": "2026-11-25",
+  "cycle": "2026-11-26",
   "batch": "A",
   "batchSize": 48,
   "symbols": [
@@ -56,6 +56,6 @@
   ],
   "dataAsOf": "2026-11-09",
   "source": "Tiingo EOD API",
-  "completedAtUtc": "2026-11-25T04:58:59+00:00",
-  "cacheSha256": "17e193d902864dd3d2faa01904f70bfe75275175e9b36588f5df685894dc6a1b"
+  "completedAtUtc": "2026-11-26T04:16:25+00:00",
+  "cacheSha256": "c6ce1fdd1e9a1784cf16152cab00930745b0d549965de32f4979b33a2b1b2784"
 }
